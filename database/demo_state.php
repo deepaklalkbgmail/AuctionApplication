@@ -29,8 +29,8 @@ return [
         'lot_order'          => 5,
         'lot_status'         => 'live',
         'base_price'         => 2000000.00,
-        'current_bid'        => 3250000.00,
-        'bid_count'          => 6,
+        'current_bid'        => 3500000.00,
+        'bid_count'          => 4,
         'ends_at'            => date('Y-m-d H:i:s', time() + 22),
         'player_id'          => 1,
         'full_name'          => 'Kabir Anand',
@@ -45,10 +45,10 @@ return [
         'career_wickets'     => 74,
         'strike_rate'        => 148.60,
         'economy'            => 7.85,
-        'bidder_team_id'     => 4,
-        'bidder_team_name'   => 'Desert Falcons',
-        'bidder_team_short'  => 'DF',
-        'bidder_team_color'  => '#a855f7',
+        'bidder_team_id'     => 1,
+        'bidder_team_name'   => 'Titan Strikers',
+        'bidder_team_short'  => 'TS',
+        'bidder_team_color'  => '#22c55e',
     ],
 
     'teams' => [
@@ -67,12 +67,10 @@ return [
     ],
 
     'bids' => [
-        ['bid_amount' => 3250000.00, 'placed_at' => date('Y-m-d H:i:s', time() -   9), 'short_name' => 'DF', 'team_name' => 'Desert Falcons', 'primary_color' => '#a855f7'],
-        ['bid_amount' => 3000000.00, 'placed_at' => date('Y-m-d H:i:s', time() -  33), 'short_name' => 'RC', 'team_name' => 'Royal Chargers', 'primary_color' => '#f59e0b'],
-        ['bid_amount' => 2750000.00, 'placed_at' => date('Y-m-d H:i:s', time() -  58), 'short_name' => 'TS', 'team_name' => 'Titan Strikers', 'primary_color' => '#22c55e'],
-        ['bid_amount' => 2500000.00, 'placed_at' => date('Y-m-d H:i:s', time() -  74), 'short_name' => 'DF', 'team_name' => 'Desert Falcons', 'primary_color' => '#a855f7'],
-        ['bid_amount' => 2250000.00, 'placed_at' => date('Y-m-d H:i:s', time() -  95), 'short_name' => 'RC', 'team_name' => 'Royal Chargers', 'primary_color' => '#f59e0b'],
-        ['bid_amount' => 2000000.00, 'placed_at' => date('Y-m-d H:i:s', time() - 110), 'short_name' => 'TS', 'team_name' => 'Titan Strikers', 'primary_color' => '#22c55e'],
+        ['bid_amount' => 3500000.00, 'placed_at' => date('Y-m-d H:i:s', time() -   9), 'short_name' => 'TS', 'team_name' => 'Titan Strikers', 'primary_color' => '#22c55e'],
+        ['bid_amount' => 3000000.00, 'placed_at' => date('Y-m-d H:i:s', time() -  33), 'short_name' => 'CK', 'team_name' => 'Coastal Kings',  'primary_color' => '#38bdf8'],
+        ['bid_amount' => 2500000.00, 'placed_at' => date('Y-m-d H:i:s', time() -  74), 'short_name' => 'TS', 'team_name' => 'Titan Strikers', 'primary_color' => '#22c55e'],
+        ['bid_amount' => 2000000.00, 'placed_at' => date('Y-m-d H:i:s', time() - 110), 'short_name' => 'CK', 'team_name' => 'Coastal Kings',  'primary_color' => '#38bdf8'],
     ],
 
     'queue' => [

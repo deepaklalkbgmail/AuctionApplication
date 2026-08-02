@@ -69,7 +69,7 @@ VALUES
     (2, 1,  8, 2, 'sold',   1000000.00, 2600000.00, 4, 7, NOW() - INTERVAL 32 MINUTE, NULL, 4, 2600000.00, NOW() - INTERVAL 30 MINUTE),
     (3, 1,  9, 3, 'sold',   1500000.00, 1800000.00, 1, 4, NOW() - INTERVAL 24 MINUTE, NULL, 1, 1800000.00, NOW() - INTERVAL 22 MINUTE),
     (4, 1, 10, 4, 'sold',    500000.00,  900000.00, 3, 5, NOW() - INTERVAL 16 MINUTE, NULL, 3,  900000.00, NOW() - INTERVAL 14 MINUTE),
-    (5, 1,  1, 5, 'live',   2000000.00, 3250000.00, 4, 6, NOW() - INTERVAL 2 MINUTE, NOW() + INTERVAL 22 SECOND, NULL, NULL, NULL),
+    (5, 1,  1, 5, 'live',   2000000.00, 3500000.00, 1, 4, NOW() - INTERVAL 2 MINUTE, NOW() + INTERVAL 22 SECOND, NULL, NULL, NULL),
     (6, 1,  2, 6, 'queued', 2000000.00, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL),
     (7, 1,  4, 7, 'queued', 1500000.00, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL),
     (8, 1,  3, 8, 'queued', 1000000.00, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL),
@@ -77,13 +77,14 @@ VALUES
     (10,1,  5,10, 'queued',  500000.00, NULL, NULL, 0, NULL, NULL, NULL, NULL, NULL);
 
 -- ---------------------------------------------------- bids on the live lot (5)
+-- The ladder sits on the tournament's ₹5 L increment grid starting from the
+-- ₹20 L base price, and every team in it can actually cover its own bid:
+-- Royal Chargers and Desert Falcons are already too committed to compete here.
 INSERT INTO `auction_bids` (`lot_id`, `player_id`, `team_id`, `user_id`, `bid_amount`, `placed_at`) VALUES
-    (5, 1, 1, 4, 2000000.00, NOW() - INTERVAL 110 SECOND),
-    (5, 1, 2, 5, 2250000.00, NOW() - INTERVAL  95 SECOND),
-    (5, 1, 4, 7, 2500000.00, NOW() - INTERVAL  74 SECOND),
-    (5, 1, 1, 4, 2750000.00, NOW() - INTERVAL  58 SECOND),
-    (5, 1, 2, 5, 3000000.00, NOW() - INTERVAL  33 SECOND),
-    (5, 1, 4, 7, 3250000.00, NOW() - INTERVAL   9 SECOND);
+    (5, 1, 3, 6, 2000000.00, NOW() - INTERVAL 110 SECOND),
+    (5, 1, 1, 4, 2500000.00, NOW() - INTERVAL  74 SECOND),
+    (5, 1, 3, 6, 3000000.00, NOW() - INTERVAL  33 SECOND),
+    (5, 1, 1, 4, 3500000.00, NOW() - INTERVAL   9 SECOND);
 
 -- ------------------------------------------------------------------- fixtures
 INSERT INTO `matches`

@@ -9,6 +9,12 @@
 --    * Every FK is named fk_<table>_<column> for readable error messages
 --    * ON DELETE RESTRICT by default; CASCADE only where the child row is
 --      meaningless without its parent (bids, balls, squads)
+--    * A foreign key whose column also appears in a CHECK constraint carries
+--      NO referential action at all — both MySQL 8 and MariaDB reject that
+--      combination outright (ERROR 1901), because a cascade could silently
+--      drive the row through its own CHECK. Those FKs fall back to the
+--      default NO ACTION, which is what we want anyway: you should not be
+--      able to delete a team out from under its owner or its sold players.
 --
 --  Load order matters (FK dependencies):
 --    tournaments -> teams -> users -> players -> auction_lots ->
@@ -134,8 +140,7 @@ CREATE TABLE `users` (
     KEY `idx_users_team` (`team_id`),
 
     CONSTRAINT `fk_users_team`
-        FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+        FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
 
     -- A team owner must have a team; nobody else may have one.
     CONSTRAINT `chk_users_team_role` CHECK (
@@ -197,8 +202,7 @@ CREATE TABLE `players` (
         FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT `fk_players_team`
-        FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+        FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
 
     CONSTRAINT `chk_player_base_price` CHECK (`base_price` > 0),
     -- A sold player must have both a team and a price >= base price.
@@ -254,8 +258,7 @@ CREATE TABLE `auction_lots` (
         FOREIGN KEY (`current_bidder_team_id`) REFERENCES `teams` (`id`)
         ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_lots_sold_to`
-        FOREIGN KEY (`sold_to_team_id`) REFERENCES `teams` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`sold_to_team_id`) REFERENCES `teams` (`id`),
     CONSTRAINT `fk_lots_closed_by`
         FOREIGN KEY (`closed_by_user_id`) REFERENCES `users` (`id`)
         ON DELETE SET NULL ON UPDATE CASCADE,
@@ -345,14 +348,11 @@ CREATE TABLE `matches` (
         FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT `fk_matches_team_a`
-        FOREIGN KEY (`team_a_id`) REFERENCES `teams` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`team_a_id`) REFERENCES `teams` (`id`),
     CONSTRAINT `fk_matches_team_b`
-        FOREIGN KEY (`team_b_id`) REFERENCES `teams` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`team_b_id`) REFERENCES `teams` (`id`),
     CONSTRAINT `fk_matches_toss_winner`
-        FOREIGN KEY (`toss_winner_team_id`) REFERENCES `teams` (`id`)
-        ON DELETE SET NULL ON UPDATE CASCADE,
+        FOREIGN KEY (`toss_winner_team_id`) REFERENCES `teams` (`id`),
     CONSTRAINT `fk_matches_winner`
         FOREIGN KEY (`winner_team_id`) REFERENCES `teams` (`id`)
         ON DELETE SET NULL ON UPDATE CASCADE,
@@ -435,11 +435,9 @@ CREATE TABLE `innings` (
         FOREIGN KEY (`match_id`) REFERENCES `matches` (`id`)
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT `fk_innings_batting_team`
-        FOREIGN KEY (`batting_team_id`) REFERENCES `teams` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`batting_team_id`) REFERENCES `teams` (`id`),
     CONSTRAINT `fk_innings_bowling_team`
-        FOREIGN KEY (`bowling_team_id`) REFERENCES `teams` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`bowling_team_id`) REFERENCES `teams` (`id`),
 
     CONSTRAINT `chk_innings_teams`   CHECK (`batting_team_id` <> `bowling_team_id`),
     CONSTRAINT `chk_innings_wickets` CHECK (`total_wickets` <= 10)
@@ -499,17 +497,14 @@ CREATE TABLE `ball_by_ball` (
         FOREIGN KEY (`innings_id`) REFERENCES `innings` (`id`)
         ON DELETE CASCADE ON UPDATE CASCADE,
     CONSTRAINT `fk_balls_striker`
-        FOREIGN KEY (`striker_id`) REFERENCES `players` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`striker_id`) REFERENCES `players` (`id`),
     CONSTRAINT `fk_balls_non_striker`
-        FOREIGN KEY (`non_striker_id`) REFERENCES `players` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`non_striker_id`) REFERENCES `players` (`id`),
     CONSTRAINT `fk_balls_bowler`
         FOREIGN KEY (`bowler_id`) REFERENCES `players` (`id`)
         ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT `fk_balls_dismissed`
-        FOREIGN KEY (`dismissed_player_id`) REFERENCES `players` (`id`)
-        ON DELETE RESTRICT ON UPDATE CASCADE,
+        FOREIGN KEY (`dismissed_player_id`) REFERENCES `players` (`id`),
     CONSTRAINT `fk_balls_fielder`
         FOREIGN KEY (`fielder_id`) REFERENCES `players` (`id`)
         ON DELETE SET NULL ON UPDATE CASCADE,

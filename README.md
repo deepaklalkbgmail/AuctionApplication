@@ -7,7 +7,9 @@ for cricket tournaments.
 
 ---
 
-## Phase 1 — What's in this repo
+## What's in this repo
+
+**Phase 1 — foundation**
 
 | # | Deliverable | Location |
 |---|-------------|----------|
@@ -15,6 +17,17 @@ for cricket tournaments.
 | 2 | Database schema | [`database/schema.sql`](database/schema.sql) (+ [`database/seed.sql`](database/seed.sql)) |
 | 3 | Secure PDO connection | [`config/db.php`](config/db.php) |
 | 4 | Auction dashboard UI | [`public/index.php`](public/index.php) |
+
+**Phase 2 — the auction engine**
+
+| Deliverable | Location |
+|-------------|----------|
+| Bid / sell / unsold logic, purse + squad enforcement | [`app/Services/AuctionService.php`](app/Services/AuctionService.php) |
+| Auth, CSRF, role gating, JSON responses | [`app/Controllers/AuctionController.php`](app/Controllers/AuctionController.php) |
+| HTTP endpoint | [`public/api/auction.php`](public/api/auction.php) |
+| Typed rejections | [`app/Exceptions/AuctionException.php`](app/Exceptions/AuctionException.php) |
+| Sign-in | [`public/login.php`](public/login.php) |
+| Integration tests (48 assertions) | [`tests/auction_test.php`](tests/auction_test.php) |
 
 ---
 
@@ -27,8 +40,13 @@ AuctionApplication/
 │   │   ├── Env.php            # .env parser (no external deps)
 │   │   ├── Security.php       # e(), CSRF tokens, hardened session bootstrap
 │   │   └── Auth.php           # login/logout, role gates, current user
-│   ├── Controllers/           # AuctionController, ScoringController, MatchController …
-│   ├── Models/                # Player, Team, AuctionLot, MatchModel, Ball …
+│   ├── Controllers/
+│   │   └── AuctionController.php   # auth + CSRF + JSON; no business rules
+│   ├── Services/
+│   │   └── AuctionService.php      # ★ the auction engine (transactional)
+│   ├── Exceptions/
+│   │   └── AuctionException.php    # typed, machine-readable rejections
+│   ├── Models/                # Player, Team, MatchModel, Ball … (Phase 3)
 │   └── Views/
 │       ├── layouts/           # app.php (shell), partials (nav, toasts)
 │       ├── auction/           # dashboard.php, player-pool.php, results.php
@@ -42,7 +60,11 @@ AuctionApplication/
 │   └── seed.sql               # demo tournament, teams, players, auction lots
 ├── public/                    # ← the ONLY web-exposed directory (set as docroot)
 │   ├── index.php              # ★ unified dashboard / live auction screen
+│   ├── login.php              # sign-in; logout.php ends the session
+│   ├── api/auction.php        # ★ bid / sell / unsold / next / state
 │   └── assets/{css,js,img}/
+├── tests/
+│   └── auction_test.php       # integration tests against a real database
 ├── storage/logs/              # app + PHP error logs (writable, never web-served)
 ├── .env.example               # copy to .env and fill in
 └── .gitignore
@@ -58,16 +80,64 @@ AuctionApplication/
 - The autoloader in `config/config.php` maps `App\…` namespaces to `app/…`, so adding
   `app/Models/Player.php` (`namespace App\Models;`) requires zero registration.
 
-### Routing plan (Phase 2)
+### Auction API
 
-`public/index.php` becomes a thin front controller in front of `App\Core\Router`:
+All writes are `POST` and require a valid CSRF token, sent either as a
+`csrf_token` field or an `X-CSRF-Token` header.
+
+| Action | Params | Role | Does |
+|--------|--------|------|------|
+| `bid` | `lot_id`, `amount` | team_owner | Validates and records a bid |
+| `sell` | `lot_id` | admin | Awards the lot, debits the purse, marks the player sold |
+| `unsold` | `lot_id` | admin | Closes the lot with no winner |
+| `next` | `tournament_id` | admin | Puts the next queued player under the hammer |
+| `state` | `tournament_id` | any signed-in user | `GET` — live lot, purse board, bid feed |
+
+Success is `{"ok": true, …}`. A rejection is `{"ok": false, "error": CODE,
+"message": …, "context": {…}}` with one of:
+
+`LOT_NOT_FOUND` · `LOT_NOT_LIVE` · `LOT_EXPIRED` · `LOT_ALREADY_OPEN` ·
+`ALREADY_LEADING` · `BID_TOO_LOW` · `BID_NOT_ALIGNED` · `INSUFFICIENT_PURSE` ·
+`SQUAD_FULL` · `OVERSEAS_LIMIT` · `NO_BIDS` · `NOTHING_QUEUED` ·
+`WRONG_TOURNAMENT` · `CSRF_FAILED` · `BAD_REQUEST`
+
+`INSUFFICIENT_PURSE` returns the affordable ceiling in `context.max_bid`, so
+the UI can say *how much* short the team is rather than just "no".
+
+**The bidding team is never read from the request** — it comes from the
+session, so an owner cannot spend another franchise's purse by editing a form
+field.
+
+### How a bid stays correct under load
+
+Every write takes a row lock before it reads anything it intends to act on:
+
+```sql
+SELECT … FROM auction_lots WHERE id = ? FOR UPDATE
+```
+
+Two owners clicking *Bid* in the same millisecond both reach `placeBid()`.
+The first to acquire the lot row proceeds; the second blocks until that
+commits, then re-reads a `current_bid` that already includes the first bid —
+so it fails `BID_TOO_LOW` instead of overwriting. Without the lock both would
+read the stale bid and the later write would silently win.
+
+Behind it sit two more layers: `UNIQUE (lot_id, bid_amount)` makes a
+duplicate bid a key error rather than a lost update, and `chk_team_spent`
+makes an overdraft impossible even if the service layer were bypassed
+entirely. Lock order is always lot → team, which is what keeps it
+deadlock-free.
+
+Verified by racing four concurrent bidders at the same amount, six times:
+one winner, three `BID_TOO_LOW`, one bid row, every time.
+
+### Still to route (Phase 3)
+
+`public/index.php` becomes a thin front controller in front of
+`App\Core\Router`:
 
 | Route | Controller | Role |
 |-------|-----------|------|
-| `GET /auction` | `AuctionController@dashboard` | all |
-| `POST /auction/bid` | `AuctionController@placeBid` | team_owner |
-| `POST /auction/sell` | `AuctionController@sell` | admin |
-| `GET /auction/state.json` | `AuctionController@state` | all (polled / SSE) |
 | `GET /match/{id}/score` | `ScoringController@pad` | scorer |
 | `POST /match/{id}/ball` | `ScoringController@recordBall` | scorer |
 | `GET /match/{id}/scorecard` | `MatchController@scorecard` | all |
@@ -92,6 +162,21 @@ Open <http://localhost:8000>. The dashboard renders live from MySQL when `.env` 
 seeded database, and falls back to a built-in demo dataset otherwise — so the UI is
 reviewable before the DB exists.
 
+Seeded accounts all use the password `Passw0rd!`:
+`admin@cricauction.test`, `scorer@cricauction.test`, `viewer@cricauction.test`,
+and one owner per team (`owner.ts@`, `owner.rc@`, `owner.ck@`, `owner.df@`).
+**Rotate these before exposing the app to a network.**
+
+### Tests
+
+```bash
+php tests/auction_test.php
+```
+
+48 assertions covering bid validation, purse and squad enforcement, the sale
+transaction and the read model. It reloads `schema.sql` + `seed.sql` on every
+run, so it is destructive to the `cric_auction` database and safe to re-run.
+
 **Production:** point Apache/Nginx `DocumentRoot` at `public/`, set `APP_ENV=production`
 (hides errors, enables `session.cookie_secure`), and grant the MySQL user only
 `SELECT, INSERT, UPDATE, DELETE` on the app schema.
@@ -109,13 +194,16 @@ reviewable before the DB exists.
 | Credential theft | `password_hash()` / `password_verify()` (bcrypt), never plaintext | `app/Core/Auth.php` |
 | Privilege escalation | `Auth::require('admin')` role gate on every mutating controller action | `app/Core/Auth.php` |
 | Overspending / negative purse | `purse_remaining` is a generated column + `CHECK (purse_spent <= purse_total)`; bids validated in a transaction | `database/schema.sql` |
+| Bidding as another team | Team read from the session, never from the request body | `app/Controllers/AuctionController.php` |
+| Lost updates / double sale | `SELECT … FOR UPDATE` on the lot + `UNIQUE (lot_id, bid_amount)` | `app/Services/AuctionService.php` |
+| Money rounding | Compared in integer paise; DECIMAL columns, never FLOAT | `app/Services/AuctionService.php` |
 | Secret leakage | `.env` outside docroot, git-ignored; no credentials in source | `.gitignore` |
 
 ---
 
 ## Roadmap
 
-- **Phase 2** — Auth + router + auction write path (`placeBid` / `sell` inside a
-  `SELECT … FOR UPDATE` transaction), admin CRUD for players & teams.
+- ~~**Phase 2** — auction write path inside a `SELECT … FOR UPDATE` transaction~~ ✅
+- **Phase 2b** — router, admin CRUD for players & teams, auction-set management.
 - **Phase 3** — Scorer pad, `ball_by_ball` ingestion, live scorecard aggregation.
-- **Phase 4** — Real-time transport (SSE, polling fallback), CSV player import, PDF scorecards.
+- **Phase 4** — Replace the 3-second poll with SSE; CSV player import; PDF scorecards.
