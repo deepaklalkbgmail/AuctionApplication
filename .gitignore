@@ -1,0 +1,28 @@
+# Environment / secrets — never commit real credentials
+.env
+.env.*
+!.env.example
+
+# Runtime
+storage/logs/*
+!storage/logs/.gitkeep
+storage/cache/*
+public/assets/img/uploads/*
+!public/assets/img/uploads/.gitkeep
+
+# Dependencies / build
+/vendor/
+/node_modules/
+composer.lock
+package-lock.json
+
+# Editors / OS
+.idea/
+.vscode/
+*.sublime-*
+.DS_Store
+Thumbs.db
+
+# Database dumps
+*.sql.gz
+dump*.sql
