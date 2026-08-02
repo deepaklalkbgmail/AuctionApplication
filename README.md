@@ -29,6 +29,13 @@ for cricket tournaments.
 | Sign-in | [`public/login.php`](public/login.php) |
 | Integration tests (48 assertions) | [`tests/auction_test.php`](tests/auction_test.php) |
 
+**Phase 3 — the scorer's interface**
+
+| Deliverable | Location |
+|-------------|----------|
+| Ball-by-ball scoring pad (HTML + Tailwind) | [`public/score.php`](public/score.php) |
+| Demo match / squads | [`database/demo_match.php`](database/demo_match.php) |
+
 ---
 
 ## 1. Project structure
@@ -61,6 +68,7 @@ AuctionApplication/
 ├── public/                    # ← the ONLY web-exposed directory (set as docroot)
 │   ├── index.php              # ★ unified dashboard / live auction screen
 │   ├── login.php              # sign-in; logout.php ends the session
+│   ├── score.php              # ★ scorer's pad (ball-by-ball entry)
 │   ├── api/auction.php        # ★ bid / sell / unsold / next / state
 │   └── assets/{css,js,img}/
 ├── tests/
@@ -131,6 +139,37 @@ deadlock-free.
 Verified by racing four concurrent bidders at the same amount, six times:
 one winner, three `BID_TOO_LOW`, one bid row, every time.
 
+### The scorer's pad
+
+`public/score.php` is built for one situation: a scorer standing at the
+boundary rope, holding a phone in one hand, in sunlight. Every layout
+decision follows from that.
+
+| Decision | Why |
+|----------|-----|
+| Every scoring control ≥ 64px tall; run keys 76–88px | Well above the 44px minimum tap target — a mis-tap here corrupts the match, not just the view |
+| Six run keys in a fixed 3×2 grid in the lower half | Inside thumb reach, and they never move or reflow between balls, so the scorer builds muscle memory |
+| Wicket isolated below the extras row, outlined in red | Rare and destructive; it must not sit adjacent to the key pressed 95% of the time |
+| Score pinned to the top | The scorer must never scroll to confirm what they just entered |
+| Extras open a second sheet for the runs run | A wide with 2 extra is two taps, and neither tap is ambiguous |
+| Blocking prompt after a wicket / end of over | Scoring is disabled until the new batter or bowler is named, so the log can't record balls faced by nobody |
+| Colour never carries meaning alone | Every key has a text label; the over chips are readable in greyscale |
+| Keyboard shortcuts (`0–6`, `W`, `D`, `N`, `U`) | The same page doubles as a desktop scoring console |
+
+**State model.** The innings is an append-only array of balls shaped exactly
+like a `ball_by_ball` row. Totals, both batting cards, bowling figures, the
+over chips and the commentary are all *derived* from that array on read —
+never stored alongside it. That is the same relationship `ball_by_ball` has
+with the `innings` cache table, and it is what makes Undo a one-line pop plus
+restoring the snapshot taken before the ball (who was on strike, who was
+bowling, who was out) rather than trying to reverse the rules.
+
+Rules currently handled: strike rotation on odd runs including byes and extra
+wides, end-of-over rotation, wides and no-balls not counting toward the over,
+byes and leg-byes not credited to the batter or charged to the bowler, maidens,
+bowler-credited vs. run-out dismissals, and a bowler being unable to bowl
+consecutive overs.
+
 ### Still to route (Phase 3)
 
 `public/index.php` becomes a thin front controller in front of
@@ -138,9 +177,13 @@ one winner, three `BID_TOO_LOW`, one bid row, every time.
 
 | Route | Controller | Role |
 |-------|-----------|------|
-| `GET /match/{id}/score` | `ScoringController@pad` | scorer |
-| `POST /match/{id}/ball` | `ScoringController@recordBall` | scorer |
+| `POST /api/scoring.php` `action=ball` | `ScoringController@recordBall` | scorer |
+| `POST /api/scoring.php` `action=undo` | `ScoringController@undoBall` | scorer |
 | `GET /match/{id}/scorecard` | `MatchController@scorecard` | all |
+
+The pad is currently local-only: it keeps the innings in the browser. Wiring
+`record()` and `undo()` to the endpoints above is the remaining work, and the
+ball object it builds already carries every column `ball_by_ball` needs.
 
 ---
 
@@ -205,5 +248,7 @@ run, so it is destructive to the `cric_auction` database and safe to re-run.
 
 - ~~**Phase 2** — auction write path inside a `SELECT … FOR UPDATE` transaction~~ ✅
 - **Phase 2b** — router, admin CRUD for players & teams, auction-set management.
-- **Phase 3** — Scorer pad, `ball_by_ball` ingestion, live scorecard aggregation.
+- ~~**Phase 3a** — scorer pad UI~~ ✅
+- **Phase 3b** — `ball_by_ball` ingestion endpoint, live scorecard aggregation,
+  innings break and second-innings target handling.
 - **Phase 4** — Replace the 3-second poll with SSE; CSV player import; PDF scorecards.

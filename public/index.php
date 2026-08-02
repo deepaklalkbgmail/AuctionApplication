@@ -288,7 +288,7 @@ $bootstrap = Security::json([
             <!-- Module tabs -->
             <nav class="ml-4 hidden items-center gap-1 rounded-xl bg-white/5 p-1 lg:flex">
                 <a href="#" class="rounded-lg bg-emerald-400/15 px-3 py-1.5 text-[13px] font-semibold text-emerald-300">Auction</a>
-                <a href="#" class="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-400 transition hover:bg-white/5 hover:text-slate-200">Live Scoring</a>
+                <a href="score.php" class="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-400 transition hover:bg-white/5 hover:text-slate-200">Live Scoring</a>
                 <a href="#" class="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-400 transition hover:bg-white/5 hover:text-slate-200">Fixtures</a>
                 <a href="#" class="rounded-lg px-3 py-1.5 text-[13px] font-medium text-slate-400 transition hover:bg-white/5 hover:text-slate-200">Squads</a>
             </nav>
@@ -559,7 +559,7 @@ $bootstrap = Security::json([
                                         Next fixture: Titan Strikers vs Royal Chargers · Chinnaswamy
                                     </p>
                                 </div>
-                                <a href="#" class="rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110">
+                                <a href="score.php" class="rounded-xl bg-gradient-to-r from-sky-400 to-indigo-500 px-5 py-3 text-sm font-black uppercase tracking-wide text-white shadow-lg shadow-sky-500/20 transition hover:brightness-110">
                                     Open scoring pad
                                 </a>
                             </div>
