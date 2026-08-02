@@ -1,0 +1,31 @@
+# =====================================================================
+#  Root guard — deny everything.
+# =====================================================================
+#
+#  The app is designed to be served with `public/` as the document root,
+#  in which case Apache never sees this file and it does nothing.
+#
+#  It exists for the case that goes wrong on shared hosting: someone
+#  uploads the WHOLE repository inside public_html. Without this, the
+#  world could fetch /config/db.php, /.env, /database/seed.sql and the
+#  entire app/ directory as plain text — every credential in the project.
+#
+#  public/.htaccess re-grants access to just that directory, so the site
+#  still works while everything above it stays sealed.
+#
+#  This is a safety net, not a substitute for setting the document root
+#  correctly. See DEPLOY-CPANEL.md.
+
+<IfModule mod_authz_core.c>
+    # Apache 2.4 (what cPanel runs)
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    # Apache 2.2 fallback
+    Order allow,deny
+    Deny from all
+</IfModule>
+
+# No directory listings anywhere, even if something is granted below.
+Options -Indexes

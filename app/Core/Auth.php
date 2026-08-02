@@ -104,7 +104,12 @@ final class Auth
     public static function require(string ...$roles): void
     {
         if (!self::check()) {
-            header('Location: /login.php');
+            // Built from APP_URL rather than hard-coded to "/login.php", so
+            // the app still works when it is served from a subdirectory
+            // (example.com/cricauction/) as it often is on shared hosting.
+            $base = defined('APP_URL') && APP_URL !== '' ? APP_URL : '';
+
+            header('Location: ' . $base . '/login.php');
             exit;
         }
 

@@ -3,7 +3,9 @@
 A sports-oriented web application for running **player auctions** and **ball-by-ball live scoring**
 for cricket tournaments.
 
-**Stack:** PHP 8.2+ (OOP, PDO) · MySQL 8 · Tailwind CSS (CDN) · Alpine.js · Vanilla JS
+**Stack:** PHP 8.1+ (OOP, PDO) · MySQL 8.0.16+ / MariaDB 10.2.1+ · Tailwind CSS (CDN) · Alpine.js
+
+**Deploying to shared hosting?** → **[DEPLOY-CPANEL.md](DEPLOY-CPANEL.md)**
 
 ---
 
@@ -84,6 +86,12 @@ AuctionApplication/
 │   ├── auction_test.php       # integration tests against a real database
 │   └── scoring_test.php
 ├── storage/logs/              # app + PHP error logs (writable, never web-served)
+├── deploy/
+│   └── strip-create-database.sh   # makes the SQL importable on cPanel
+├── .htaccess                  # deny-all guard (see DEPLOY-CPANEL.md)
+├── public/.htaccess           # the only directory the web may reach
+├── .cpanel.yml                # cPanel Git Version Control deploy tasks
+├── DEPLOY-CPANEL.md           # ★ shared-hosting deployment guide
 ├── .env.example               # copy to .env and fill in
 └── .gitignore
 ```
@@ -279,6 +287,11 @@ and safe to re-run.
 **Production:** point Apache/Nginx `DocumentRoot` at `public/`, set `APP_ENV=production`
 (hides errors, enables `session.cookie_secure`), and grant the MySQL user only
 `SELECT, INSERT, UPDATE, DELETE` on the app schema.
+
+For cPanel or other shared hosting, follow **[DEPLOY-CPANEL.md](DEPLOY-CPANEL.md)** —
+it covers the two version requirements that decide whether the app can run at all,
+the `CREATE DATABASE` statements that must be stripped before importing, and the
+document-root setup.
 
 ---
 

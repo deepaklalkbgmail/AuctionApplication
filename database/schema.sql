@@ -21,11 +21,22 @@
 --    auction_bids -> matches -> match_squads -> innings -> ball_by_ball
 -- =====================================================================
 
+-- ---------------------------------------------------------------------
+--  SHARED HOSTING (cPanel / Plesk): DELETE the next two statements.
+--
+--  cPanel creates the database for you and prefixes its name
+--  (cpaneluser_cricauction), and the MySQL user it issues has no
+--  CREATE DATABASE privilege — so both statements will fail. Create the
+--  database in cPanel first, then import the rest of this file into it.
+--
+--      deploy/strip-create-database.sh   does this for you.
+-- ---------------------------------------------------------------------
 CREATE DATABASE IF NOT EXISTS `cric_auction`
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_unicode_ci;
 
 USE `cric_auction`;
+-- --------------------------- end of the shared-hosting cut ------------
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `ball_by_ball`;

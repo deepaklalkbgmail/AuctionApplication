@@ -1,0 +1,39 @@
+---
+# cPanel Git™ Version Control deployment.
+#
+# Only used if you deploy via cPanel -> Git Version Control. Ignored
+# entirely otherwise (uploading a zip, SFTP, or `git pull` over SSH).
+#
+# EDIT THE FIRST LINE: replace CPUSER with your cPanel username, and
+# adjust the target if you are not deploying to a subdomain called
+# "cricauction". The path must be absolute — cPanel rejects relative ones.
+#
+# Note what is NOT copied: .env (it lives on the server and must never be
+# overwritten by a deploy), storage/ (runtime logs), tests/ and deploy/
+# (not needed in production).
+#
+# After editing, commit this file, then in cPanel:
+#   Git Version Control -> Manage -> Pull or Deploy -> Update from Remote
+#                                                   -> Deploy HEAD Commit
+
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/CPUSER/cricauction
+
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/mkdir -p $DEPLOYPATH/storage/logs
+
+    - /bin/cp -R app       $DEPLOYPATH/
+    - /bin/cp -R config    $DEPLOYPATH/
+    - /bin/cp -R public    $DEPLOYPATH/
+    - /bin/cp -R database  $DEPLOYPATH/
+    - /bin/cp .env.example $DEPLOYPATH/.env.example
+
+    # The SQL fixtures are only needed for the initial import. Leaving them
+    # on the server is a needless disclosure risk.
+    - /bin/rm -f $DEPLOYPATH/database/seed.sql
+    - /bin/rm -f $DEPLOYPATH/database/seed_match.sql
+
+    - /bin/find $DEPLOYPATH -type d -exec chmod 755 {} \;
+    - /bin/find $DEPLOYPATH -type f -exec chmod 644 {} \;
+    - /bin/chmod 755 $DEPLOYPATH/storage/logs

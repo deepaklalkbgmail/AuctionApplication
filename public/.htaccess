@@ -1,0 +1,93 @@
+# =====================================================================
+#  Document root — the only directory the web is allowed to reach.
+# =====================================================================
+
+# Re-grant what the root .htaccess denied, for this directory only.
+<IfModule mod_authz_core.c>
+    Require all granted
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Allow from all
+</IfModule>
+
+Options -Indexes +FollowSymLinks
+DirectoryIndex index.php
+
+# Never serve dotfiles — .htaccess, .env, .git remnants, editor backups.
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Never serve source or data that may get copied in here by accident.
+<FilesMatch "\.(sql|md|yml|yaml|lock|json|ini|log|bak|orig|swp|dist)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# ---------------------------------------------------------------------
+#  Response headers
+#
+#  These duplicate Security::sendSecurityHeaders() on purpose: PHP's
+#  headers are gone the moment a request is served by Apache alone (a
+#  static file, or an error page), and those are exactly the responses an
+#  attacker probes.
+# ---------------------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+
+    # Uncomment once the site is confirmed working over HTTPS. Do not set
+    # it earlier — HSTS is remembered by browsers and is hard to undo.
+    # Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+
+    # The session cookie already carries these; this is belt and braces.
+    Header always edit Set-Cookie ^(.*)$ "$1; HttpOnly; SameSite=Lax"
+</IfModule>
+
+# ---------------------------------------------------------------------
+#  HTTPS
+#
+#  Prefer cPanel's own switch: Domains -> Force HTTPS Redirect. Only
+#  uncomment this if that toggle is unavailable. The X-Forwarded-Proto
+#  test keeps it from looping behind a proxy or CDN.
+# ---------------------------------------------------------------------
+# <IfModule mod_rewrite.c>
+#     RewriteEngine On
+#     RewriteCond %{HTTPS} !=on
+#     RewriteCond %{HTTP:X-Forwarded-Proto} !=https
+#     RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [L,R=301]
+# </IfModule>
+
+# ---------------------------------------------------------------------
+#  Static asset caching. The pages themselves must never be cached — a
+#  cached auction dashboard would show a stale bid.
+# ---------------------------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/png   "access plus 1 month"
+    ExpiresByType image/jpeg  "access plus 1 month"
+    ExpiresByType image/svg+xml "access plus 1 month"
+    ExpiresByType text/css    "access plus 1 week"
+    ExpiresByType application/javascript "access plus 1 week"
+</IfModule>
+
+<FilesMatch "\.php$">
+    <IfModule mod_headers.c>
+        Header always set Cache-Control "no-store, no-cache, must-revalidate"
+    </IfModule>
+</FilesMatch>
