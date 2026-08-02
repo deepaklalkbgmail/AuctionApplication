@@ -35,6 +35,11 @@ for cricket tournaments.
 |-------------|----------|
 | Ball-by-ball scoring pad (HTML + Tailwind) | [`public/score.php`](public/score.php) |
 | Demo match / squads | [`database/demo_match.php`](database/demo_match.php) |
+| Scoring engine (record, undo, scorecard) | [`app/Services/ScoringService.php`](app/Services/ScoringService.php) |
+| Auth, CSRF, role gating, JSON | [`app/Controllers/ScoringController.php`](app/Controllers/ScoringController.php) |
+| HTTP endpoint | [`public/api/scoring.php`](public/api/scoring.php) |
+| Live match fixture | [`database/seed_match.sql`](database/seed_match.sql) |
+| Integration tests (54 assertions) | [`tests/scoring_test.php`](tests/scoring_test.php) |
 
 ---
 
@@ -48,11 +53,14 @@ AuctionApplication/
 │   │   ├── Security.php       # e(), CSRF tokens, hardened session bootstrap
 │   │   └── Auth.php           # login/logout, role gates, current user
 │   ├── Controllers/
-│   │   └── AuctionController.php   # auth + CSRF + JSON; no business rules
+│   │   ├── AuctionController.php   # auth + CSRF + JSON; no business rules
+│   │   └── ScoringController.php
 │   ├── Services/
-│   │   └── AuctionService.php      # ★ the auction engine (transactional)
+│   │   ├── AuctionService.php      # ★ the auction engine (transactional)
+│   │   └── ScoringService.php      # ★ the scoring engine (transactional)
 │   ├── Exceptions/
-│   │   └── AuctionException.php    # typed, machine-readable rejections
+│   │   ├── AuctionException.php    # typed, machine-readable rejections
+│   │   └── ScoringException.php
 │   ├── Models/                # Player, Team, MatchModel, Ball … (Phase 3)
 │   └── Views/
 │       ├── layouts/           # app.php (shell), partials (nav, toasts)
@@ -70,9 +78,11 @@ AuctionApplication/
 │   ├── login.php              # sign-in; logout.php ends the session
 │   ├── score.php              # ★ scorer's pad (ball-by-ball entry)
 │   ├── api/auction.php        # ★ bid / sell / unsold / next / state
+│   ├── api/scoring.php        # ★ ball / undo / scorecard
 │   └── assets/{css,js,img}/
 ├── tests/
-│   └── auction_test.php       # integration tests against a real database
+│   ├── auction_test.php       # integration tests against a real database
+│   └── scoring_test.php
 ├── storage/logs/              # app + PHP error logs (writable, never web-served)
 ├── .env.example               # copy to .env and fill in
 └── .gitignore
@@ -170,6 +180,50 @@ byes and leg-byes not credited to the batter or charged to the bowler, maidens,
 bowler-credited vs. run-out dismissals, and a bowler being unable to bowl
 consecutive overs.
 
+### Scoring API
+
+| Action | Params | Role | Does |
+|--------|--------|------|------|
+| `ball` | `innings_id` + the delivery | scorer, admin | Records one ball |
+| `undo` | `innings_id` | scorer, admin | Removes the most recent ball |
+| `scorecard` | `innings_id` | any signed-in user | `GET` — the whole card, safe to poll |
+
+The delivery itself is `runs_off_bat`, or `extra_type` + `extra_runs`, or
+`is_wicket` + `dismissal_type` (+ `dismissed_player_id`, `fielder_id`).
+
+**The client does not send who is on strike.** The server derives it from the
+previous ball and the laws — batters cross on odd runs (off the bat, run as
+byes, or run beyond the penalty on a wide), ends change at the end of a legal
+over, and a wicket leaves an end vacant. The pad supplies only what the server
+cannot know: `striker_id` + `non_striker_id` + `bowler_id` on the first ball,
+`new_batter_id` after a wicket, and `bowler_id` at the start of an over. A
+buggy or hostile client therefore cannot credit runs to the wrong batter.
+
+When the server needs one of those, it says so with `NEEDS_OPENING`,
+`NEEDS_BATTER` or `NEEDS_BOWLER`, and the pad opens the matching picker.
+Other codes: `INNINGS_CLOSED` · `MATCH_NOT_LIVE` · `NOT_IN_SQUAD` ·
+`ALREADY_OUT` · `SAME_BATTER` · `CONSECUTIVE_OVERS` · `BAD_BALL` ·
+`NOTHING_TO_UNDO`.
+
+### Updating the scorecard without a reload
+
+Every response — from `ball`, `undo` and `scorecard` alike — is the **complete
+scorecard**, never a delta. The pad calls `fetch()`, then replaces its state
+wholesale in `hydrate()`. Three things follow:
+
+- A dropped, duplicated or out-of-order response cannot leave the pad
+  half-updated, because there is no accumulated local state to corrupt.
+- The client and the database cannot disagree; the browser is a view.
+- Undo needs no special client handling — it is just another scorecard.
+
+Nothing is applied optimistically: a ball the database rejected must never
+look like it was scored. A `busy` flag blocks a double-tap while a ball is in
+flight, which on a phone is a real way to score the same delivery twice.
+
+`ball_by_ball` remains the source of truth. The `innings` row is a cache,
+recomputed from the log after every write rather than incremented — so undo,
+a correction, or a direct edit can never leave the totals wrong.
+
 ### Still to route (Phase 3)
 
 `public/index.php` becomes a thin front controller in front of
@@ -177,13 +231,11 @@ consecutive overs.
 
 | Route | Controller | Role |
 |-------|-----------|------|
-| `POST /api/scoring.php` `action=ball` | `ScoringController@recordBall` | scorer |
-| `POST /api/scoring.php` `action=undo` | `ScoringController@undoBall` | scorer |
 | `GET /match/{id}/scorecard` | `MatchController@scorecard` | all |
+| `GET /match/{id}` | `MatchController@show` | all |
 
-The pad is currently local-only: it keeps the innings in the browser. Wiring
-`record()` and `undo()` to the endpoints above is the remaining work, and the
-ball object it builds already carries every column `ball_by_ball` needs.
+A read-only viewer scorecard can be built on `action=scorecard` today — it is
+already open to any signed-in user and safe to poll.
 
 ---
 
@@ -193,6 +245,7 @@ ball object it builds already carries every column `ball_by_ball` needs.
 # 1. Database
 mysql -u root -p < database/schema.sql
 mysql -u root -p < database/seed.sql        # optional demo data
+mysql -u root -p < database/seed_match.sql  # optional live match for the scorer
 
 # 2. Config
 cp .env.example .env      # then edit DB_USER / DB_PASS
@@ -213,12 +266,15 @@ and one owner per team (`owner.ts@`, `owner.rc@`, `owner.ck@`, `owner.df@`).
 ### Tests
 
 ```bash
-php tests/auction_test.php
+php tests/auction_test.php     # 48 assertions
+php tests/scoring_test.php     # 54 assertions
 ```
 
-48 assertions covering bid validation, purse and squad enforcement, the sale
-transaction and the read model. It reloads `schema.sql` + `seed.sql` on every
-run, so it is destructive to the `cric_auction` database and safe to re-run.
+The auction suite covers bid validation, purse and squad enforcement, the sale
+transaction and the read model. The scoring suite covers strike rotation,
+extras, over completion, wickets, undo and the innings cache. Both reload the
+SQL files on every run, so they are destructive to the `cric_auction` database
+and safe to re-run.
 
 **Production:** point Apache/Nginx `DocumentRoot` at `public/`, set `APP_ENV=production`
 (hides errors, enables `session.cookie_secure`), and grant the MySQL user only
@@ -248,7 +304,7 @@ run, so it is destructive to the `cric_auction` database and safe to re-run.
 
 - ~~**Phase 2** — auction write path inside a `SELECT … FOR UPDATE` transaction~~ ✅
 - **Phase 2b** — router, admin CRUD for players & teams, auction-set management.
-- ~~**Phase 3a** — scorer pad UI~~ ✅
-- **Phase 3b** — `ball_by_ball` ingestion endpoint, live scorecard aggregation,
-  innings break and second-innings target handling.
+- ~~**Phase 3** — scorer pad UI, `ball_by_ball` ingestion, live scorecard~~ ✅
+- **Phase 3b** — innings break, second-innings target and result calculation;
+  a read-only viewer scorecard on `action=scorecard`.
 - **Phase 4** — Replace the 3-second poll with SSE; CSV player import; PDF scorecards.

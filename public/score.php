@@ -36,6 +36,7 @@ require_once dirname(__DIR__) . '/config/config.php';
 
 use App\Core\Auth;
 use App\Core\Security;
+use App\Services\ScoringService;
 
 $demo = require dirname(__DIR__) . '/database/demo_match.php';
 
@@ -44,16 +45,50 @@ $innings = $demo['innings'];
 
 $scorer = Auth::user() ?? ['name' => 'Priya Nair', 'role' => Auth::ROLE_SCORER];
 
+// ---------------------------------------------------------------------
+//  Live mode
+//
+//  Needs three things: a signed-in scorer or admin, a reachable database,
+//  and an open innings. Missing any of them, the pad runs on the demo match
+//  and keeps the innings in the browser — so the interface is still usable
+//  and reviewable, it just isn't persisting.
+// ---------------------------------------------------------------------
+$INNINGS_ID = filter_input(INPUT_GET, 'innings', FILTER_VALIDATE_INT) ?: 1;
+
+$live    = false;
+$initial = null;
+
+if (Auth::check() && Auth::is(Auth::ROLE_SCORER, Auth::ROLE_ADMIN) && Database::isAvailable()) {
+    try {
+        $initial = (new ScoringService())->scorecard($INNINGS_ID);
+        $live    = true;
+
+        $match['overs_per_innings'] = $initial['innings']['overs_limit'];
+        $match['balls_per_over']    = $initial['innings']['balls_per_over'];
+        $innings['batting_team']    = ['name' => $initial['innings']['batting_team'],
+                                       'short_name' => $initial['innings']['batting_short']];
+        $innings['bowling_team']    = ['name' => $initial['innings']['bowling_team'],
+                                       'short_name' => $initial['innings']['bowling_short']];
+        $innings['target']          = $initial['innings']['target'];
+    } catch (Throwable $e) {
+        error_log('[scorer] falling back to the demo match: ' . $e->getMessage());
+    }
+}
+
 $bootstrap = Security::json([
     'csrf'         => Security::csrfToken(),
+    'live'         => $live,
+    'apiUrl'       => 'api/scoring.php',
     'matchId'      => (int) $match['id'],
-    'inningsId'    => (int) $innings['id'],
+    'inningsId'    => $live ? $INNINGS_ID : (int) $innings['id'],
     'oversLimit'   => (int) $match['overs_per_innings'],
     'ballsPerOver' => (int) $match['balls_per_over'],
     'target'       => $innings['target'],
-    'battingXi'    => $demo['batting_xi'],
-    'bowlingXi'    => $demo['bowling_xi'],
+    'battingXi'    => $live ? $initial['squads']['batting'] : $demo['batting_xi'],
+    'bowlingXi'    => $live ? $initial['squads']['bowling'] : $demo['bowling_xi'],
     'opening'      => $demo['opening'],
+    // Server-rendered first payload, so a live pad never flashes demo data.
+    'initial'      => $initial,
 ]);
 
 ?>
@@ -145,7 +180,11 @@ $bootstrap = Security::json([
             <p class="truncate text-[11px] font-semibold text-slate-400">
                 <?= e((string) $match['toss_text']) ?> · <?= e((string) $match['venue']) ?>
             </p>
-            <span class="ml-auto shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            <span class="ml-auto shrink-0 rounded-lg border px-2 py-1 text-[10px] font-bold uppercase tracking-wider
+                         <?= $live ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/5 text-slate-400' ?>">
+                <?= $live ? 'Saving' : 'Demo' ?>
+            </span>
+            <span class="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 <?= e((string) $scorer['name']) ?>
             </span>
         </div>
@@ -230,13 +269,16 @@ $bootstrap = Security::json([
 
                 <div class="mt-2 flex items-center gap-2 border-t border-white/8 pt-2.5">
                     <span class="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-amber-400/15 text-[10px] font-black text-amber-300">B</span>
-                    <span class="truncate text-[14px] font-bold text-white" x-text="bowler.name"></span>
+                    <!-- bowler is null until the opening bowler is named -->
+                    <span class="truncate text-[14px] font-bold"
+                          :class="bowler ? 'text-white' : 'text-slate-600'"
+                          x-text="bowler ? bowler.name : 'bowler to come'"></span>
                     <span class="ml-auto shrink-0 font-mono text-[13px] font-bold text-slate-300">
-                        <span x-text="bowlerCard(bowler.id).overs"></span>-<span x-text="bowlerCard(bowler.id).maidens"></span>-<span
-                              x-text="bowlerCard(bowler.id).conceded"></span>-<span class="text-emerald-300" x-text="bowlerCard(bowler.id).wickets"></span>
+                        <span x-text="bowlerCard(bowler?.id).overs"></span>-<span x-text="bowlerCard(bowler?.id).maidens"></span>-<span
+                              x-text="bowlerCard(bowler?.id).conceded"></span>-<span class="text-emerald-300" x-text="bowlerCard(bowler?.id).wickets"></span>
                     </span>
                     <span class="shrink-0 rounded-lg bg-white/5 px-2 py-1 font-mono text-[11px] text-slate-400">
-                        econ <span x-text="bowlerCard(bowler.id).econ"></span>
+                        econ <span x-text="bowlerCard(bowler?.id).econ"></span>
                     </span>
                 </div>
             </section>
@@ -314,7 +356,11 @@ $bootstrap = Security::json([
                         </svg>
                         Undo
                     </button>
-                    <button type="button" @click="swapStrike()" :disabled="locked"
+                    <!-- In live mode the server derives the strike from the
+                         ball log, so a manual swap would be overwritten by
+                         the next response. Correct a mistake with Undo. -->
+                    <button type="button" @click="swapStrike()" :disabled="locked || live"
+                            :title="live ? 'Strike is derived from the ball log — use Undo to correct a mistake' : 'Swap the strike'"
                             class="key flex h-[56px] items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 text-[13px] font-black uppercase tracking-wide text-slate-200">
                         <svg viewBox="0 0 24 24" class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">
                             <path d="M7 4 3 8l4 4"/><path d="M3 8h13"/><path d="m17 20 4-4-4-4"/><path d="M21 16H8"/>
@@ -558,6 +604,15 @@ function scorer(init) {
         toasts: [],
         _seq: 0,
 
+        // Live mode only. The server owns strike rotation, so the client
+        // sends it just the facts it alone knows: the opening pair, a new
+        // batter after a wicket, and the bowler for a new over. These hold
+        // that selection until the next ball carries it.
+        isOpening: false,
+        pendingBatter: null,
+        pendingBowler: null,
+        busy: false,             // one ball in flight; blocks a double-tap
+
         extraKeys: [
             { type: 'wide',    short: 'WD', label: 'Wide',     aria: 'Wide' },
             { type: 'no_ball', short: 'NB', label: 'No ball',  aria: 'No ball' },
@@ -575,6 +630,11 @@ function scorer(init) {
         ],
 
         init() {
+            if (this.live) {
+                this.hydrate(this.initial);
+                return;
+            }
+
             this.striker    = this.batter(this.opening.striker_id);
             this.nonStriker = this.batter(this.opening.non_striker_id);
             this.bowler     = this.bowlingXi.find(p => p.id === this.opening.bowler_id);
@@ -584,7 +644,7 @@ function scorer(init) {
         batter(id)  { return this.battingXi.find(p => p.id === id); },
         me(which)   { return which === 'striker' ? this.striker : this.nonStriker; },
 
-        get locked() { return this.needsBatter || this.needsBowler; },
+        get locked() { return this.needsBatter || this.needsBowler || this.busy; },
 
         get availableBatters() {
             const crease = [this.striker?.id, this.nonStriker?.id];
@@ -776,10 +836,19 @@ function scorer(init) {
          * was on strike, who was bowling and who was out, rather than trying
          * to reverse the rules.
          */
-        record({ runsOffBat = 0, extraRuns = 0, extraType = 'none', isWicket = false,
-                 dismissal = null, dismissedId = null, fielderId = null } = {}) {
-
+        record(opts = {}) {
             if (this.locked) return this.toast('Fill the gap in the middle first', 'error');
+
+            // Live mode: the server records the ball and hands back the whole
+            // scorecard. Nothing is applied locally first — a ball that the
+            // database rejected must never appear to have been scored.
+            if (this.live) return this.postBall(opts);
+
+            return this.recordLocally(opts);
+        },
+
+        recordLocally({ runsOffBat = 0, extraRuns = 0, extraType = 'none', isWicket = false,
+                        dismissal = null, dismissedId = null, fielderId = null } = {}) {
 
             const isLegal = extraType !== 'wide' && extraType !== 'no_ball';
             const over = Math.floor(this.totals.legal / this.ballsPerOver);
@@ -836,7 +905,18 @@ function scorer(init) {
             }
         },
 
-        undo() {
+        async undo() {
+            if (this.live) {
+                const payload = await this.post('undo', {});
+
+                if (payload) {
+                    this.hydrate(payload);
+                    this.toast('Last ball removed', 'muted');
+                }
+
+                return;
+            }
+
             const ball = this.balls.pop();
             if (!ball) return;
 
@@ -860,20 +940,181 @@ function scorer(init) {
             this.toast(`${this.striker.name} on strike`, 'muted');
         },
 
+        /**
+         * Fills the vacant end. At the start of an innings both ends are
+         * vacant, so this is called twice; after a wicket, once.
+         */
         sendInBatter(p) {
             if (this.striker === null) this.striker = p;
-            else this.nonStriker = p;
+            else if (this.nonStriker === null) this.nonStriker = p;
 
-            this.needsBatter = false;
-            this.modal = this.needsBowler ? 'bowler' : null;
+            // Held until the next ball carries it to the server.
+            if (this.live && !this.isOpening) this.pendingBatter = p.id;
+
+            this.needsBatter = this.striker === null || this.nonStriker === null;
+            this.modal = this.needsBatter ? 'batter' : (this.needsBowler ? 'bowler' : null);
             this.toast(`${p.name} to the crease`, 'success');
         },
 
         setBowler(p) {
             this.bowler = p;
+
+            if (this.live) this.pendingBowler = p.id;
+
             this.needsBowler = false;
-            this.modal = null;
+            this.modal = this.needsBatter ? 'batter' : null;
             this.toast(`${p.name} into the attack`, 'success');
+        },
+
+        // ---------------------------------------------------------------- api
+        /**
+         * POST one delivery. The response is the entire scorecard, so the
+         * client replaces its state instead of patching it — a dropped or
+         * out-of-order response can never leave the pad half-updated.
+         */
+        async postBall({ runsOffBat = 0, extraRuns = 0, extraType = 'none', isWicket = false,
+                         dismissal = null, dismissedId = null, fielderId = null } = {}) {
+
+            const fields = {
+                innings_id:   this.inningsId,
+                runs_off_bat: runsOffBat,
+                extra_runs:   extraRuns,
+                extra_type:   extraType,
+                is_wicket:    isWicket ? '1' : '0',
+            };
+
+            if (isWicket) {
+                fields.dismissal_type = dismissal;
+                if (dismissedId) fields.dismissed_player_id = dismissedId;
+                if (fielderId)   fields.fielder_id = fielderId;
+            }
+
+            if (this.isOpening) {
+                fields.striker_id     = this.striker.id;
+                fields.non_striker_id = this.nonStriker.id;
+                fields.bowler_id      = this.bowler.id;
+            } else {
+                if (this.pendingBatter) fields.new_batter_id = this.pendingBatter;
+                if (this.pendingBowler) fields.bowler_id     = this.pendingBowler;
+            }
+
+            const payload = await this.post('ball', fields);
+            if (payload) this.hydrate(payload);
+        },
+
+        /** Returns the payload, or null after showing why it was refused. */
+        async post(action, fields) {
+            if (this.busy) return null;
+            this.busy = true;
+
+            const body = new URLSearchParams({
+                action,
+                csrf_token: this.csrf,
+                innings_id: this.inningsId,
+                ...fields,
+            });
+
+            try {
+                const res = await fetch(this.apiUrl, {
+                    method: 'POST',
+                    credentials: 'same-origin',
+                    headers: { 'X-CSRF-Token': this.csrf, 'Accept': 'application/json' },
+                    body,
+                });
+
+                const data = await res.json();
+
+                if (!data.ok) {
+                    this.toast(data.message || 'That ball was refused', 'error');
+
+                    // The server can also be telling us what it still needs.
+                    if (data.error === 'NEEDS_BATTER')  { this.needsBatter = true; this.modal = 'batter'; }
+                    if (data.error === 'NEEDS_BOWLER')  { this.needsBowler = true; this.modal = 'bowler'; }
+                    if (data.error === 'NEEDS_OPENING') { this.isOpening = true; this.needsBatter = true; }
+
+                    return null;
+                }
+
+                return data;
+            } catch (e) {
+                this.toast('Could not reach the scoring server — nothing was recorded', 'error');
+                return null;
+            } finally {
+                this.busy = false;
+            }
+        },
+
+        /** Replace all local state with the server's scorecard. */
+        hydrate(payload) {
+            if (!payload || !payload.balls) return;
+
+            const previous = this.balls.length;
+
+            this.balls = payload.balls.map(b => this.fromServer(b));
+
+            const st = payload.state || {};
+
+            if (st.needs_opening) {
+                this.isOpening  = true;
+                this.striker    = null;
+                this.nonStriker = null;
+                this.bowler     = null;
+                this.needsBatter = true;
+                this.needsBowler = true;
+            } else {
+                this.isOpening   = false;
+                this.striker     = st.striker_id ? this.batter(st.striker_id) : null;
+                this.nonStriker  = st.non_striker_id ? this.batter(st.non_striker_id) : null;
+                this.bowler      = st.bowler_id ? this.bowlingXi.find(p => p.id === st.bowler_id) : null;
+                this.needsBatter = !!st.needs_batter;
+                this.needsBowler = !!st.needs_bowler;
+            }
+
+            this.out = st.out || [];
+            this.pendingBatter = null;
+            this.pendingBowler = null;
+
+            if (this.needsBatter)      this.modal = 'batter';
+            else if (this.needsBowler) this.modal = 'bowler';
+            else if (this.modal === 'batter' || this.modal === 'bowler') this.modal = null;
+
+            if (payload.innings && payload.innings.target !== undefined) {
+                this.target = payload.innings.target;
+            }
+
+            if (this.balls.length > previous) {
+                this.toast(this.balls[this.balls.length - 1].chip === 'W'
+                    ? 'Wicket recorded'
+                    : `Recorded: ${this.balls[this.balls.length - 1].chip}`, 'success');
+            }
+        },
+
+        /** Server row -> the shape the rest of this component already uses. */
+        fromServer(b) {
+            const ball = {
+                seq: b.seq,
+                over: b.over,
+                overLabel: `${b.over}.${b.ball_in_over}`,
+                strikerId: b.striker_id,
+                nonStrikerId: b.non_striker_id,
+                bowlerId: b.bowler_id,
+                runsOffBat: b.runs_off_bat,
+                extraRuns: b.extra_runs,
+                extraType: b.extra_type,
+                isLegal: b.is_legal,
+                isFour: b.is_four,
+                isSix: b.is_six,
+                isWicket: b.is_wicket,
+                dismissal: b.dismissal_type,
+                dismissedId: b.dismissed_player_id,
+                fielderId: b.fielder_id,
+            };
+
+            ball.chip = this.chipFor(ball);
+            ball.tone = this.toneFor(ball);
+            ball.text = this.commentaryFor(ball);
+
+            return ball;
         },
 
         // -------------------------------------------------------------- labels
