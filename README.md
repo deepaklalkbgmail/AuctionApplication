@@ -5,6 +5,9 @@ for cricket tournaments.
 
 **Stack:** PHP 8.1+ (OOP, PDO) · MySQL 8.0.16+ / MariaDB 10.2.1+ · Tailwind CSS (prebuilt) · Alpine.js (vendored) — no external CDN, no build step on the server
 
+**Using the application?** → **[USER-GUIDE.md](USER-GUIDE.md)** — all four roles,
+a clean-install procedure and a demonstration script.
+
 **Deploying to shared hosting?** → **[DEPLOY-CPANEL.md](DEPLOY-CPANEL.md)**
 
 ---
@@ -74,7 +77,9 @@ AuctionApplication/
 │   └── db.php                 # ★ PDO singleton (prepared statements, utf8mb4)
 ├── database/
 │   ├── schema.sql             # ★ full DDL: 10 tables, FKs, CHECKs, indexes, views
-│   └── seed.sql               # demo tournament, teams, players, auction lots
+│   ├── reset.sql              # ★ wipe to a clean, empty application
+│   ├── demo_apl.sql           # ★ 6 teams, 60 players, ready to demonstrate
+│   └── seed.sql               # fixtures the test suites run against
 ├── public/                    # ← the ONLY web-exposed directory (set as docroot)
 │   ├── index.php              # ★ landing page — roles, features, live status (no JS)
 │   ├── auction.php            # ★ live auction dashboard
