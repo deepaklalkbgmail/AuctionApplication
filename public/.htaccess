@@ -73,8 +73,17 @@ DirectoryIndex index.php
     #  Neither weakens script injection defence the way script-src
     #  'unsafe-inline' would — that one is NOT present.
     # -----------------------------------------------------------------
+    #  mod_headers keeps TWO tables: "onsuccess" (plain `Header set`) and
+    #  "always". An unset only clears the table it names. A parent that used
+    #  plain `Header set` therefore survives `Header always unset`, and the
+    #  browser receives BOTH policies — which it enforces as the intersection,
+    #  i.e. the strictest. That is why the page stayed broken even though our
+    #  header was present. Clear both tables.
+    Header unset Content-Security-Policy
     Header always unset Content-Security-Policy
+    Header unset Content-Security-Policy-Report-Only
     Header always unset Content-Security-Policy-Report-Only
+
     Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
 
     Header always set X-Content-Type-Options "nosniff"
