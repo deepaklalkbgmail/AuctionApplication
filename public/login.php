@@ -16,7 +16,7 @@ use App\Core\Auth;
 use App\Core\Security;
 
 if (Auth::check()) {
-    header('Location: index.php');
+    header('Location: ' . (Auth::role() === Auth::ROLE_SCORER ? 'score.php' : 'auction.php'));
     exit;
 }
 
@@ -30,7 +30,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $password = (string) ($_POST['password'] ?? '');
 
         if (Auth::attempt(Database::pdo(), $email, $password)) {
-            header('Location: index.php');
+            // Straight to the screen this person signed in to use — a scorer
+            // at the ground should not have to pass through a hub page.
+            header('Location: ' . (Auth::role() === Auth::ROLE_SCORER ? 'score.php' : 'auction.php'));
             exit;
         }
 
@@ -97,7 +99,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         </form>
 
         <p class="mt-5 text-center text-[12px] text-slate-500">
-            Watching only? <a href="index.php?role=viewer" class="font-semibold text-emerald-400 hover:underline">Open the live board</a>
+            Watching only? <a href="auction.php?role=viewer" class="font-semibold text-emerald-400 hover:underline">Open the live board</a>
         </p>
     </main>
 </body>

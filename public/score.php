@@ -130,7 +130,8 @@ $bootstrap = Security::json([
             <p class="truncate text-[11px] font-semibold text-slate-400">
                 <?= e((string) $match['toss_text']) ?> · <?= e((string) $match['venue']) ?>
             </p>
-            <span class="ml-auto shrink-0 rounded-lg border px-2 py-1 text-[10px] font-bold uppercase tracking-wider
+            <a href="index.php" class="ml-auto shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:text-slate-200">Home</a>
+            <span class="shrink-0 rounded-lg border px-2 py-1 text-[10px] font-bold uppercase tracking-wider
                          <?= $live ? 'border-emerald-400/30 bg-emerald-400/10 text-emerald-300' : 'border-white/10 bg-white/5 text-slate-400' ?>">
                 <?= $live ? 'Saving' : 'Demo' ?>
             </span>

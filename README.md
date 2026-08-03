@@ -18,7 +18,7 @@ for cricket tournaments.
 | 1 | Project structure | this file + folder tree below |
 | 2 | Database schema | [`database/schema.sql`](database/schema.sql) (+ [`database/seed.sql`](database/seed.sql)) |
 | 3 | Secure PDO connection | [`config/db.php`](config/db.php) |
-| 4 | Auction dashboard UI | [`public/index.php`](public/index.php) |
+| 4 | Auction dashboard UI | [`public/auction.php`](public/auction.php) |
 
 **Phase 2 — the auction engine**
 
@@ -76,7 +76,8 @@ AuctionApplication/
 │   ├── schema.sql             # ★ full DDL: 10 tables, FKs, CHECKs, indexes, views
 │   └── seed.sql               # demo tournament, teams, players, auction lots
 ├── public/                    # ← the ONLY web-exposed directory (set as docroot)
-│   ├── index.php              # ★ unified dashboard / live auction screen
+│   ├── index.php              # ★ landing page — roles, features, live status (no JS)
+│   ├── auction.php            # ★ live auction dashboard
 │   ├── login.php              # sign-in; logout.php ends the session
 │   ├── score.php              # ★ scorer's pad (ball-by-ball entry)
 │   ├── api/auction.php        # ★ bid / sell / unsold / next / state
