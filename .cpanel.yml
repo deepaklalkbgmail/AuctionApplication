@@ -2,38 +2,50 @@
 # cPanel Git™ Version Control deployment.
 #
 # Only used if you deploy via cPanel -> Git Version Control. Ignored
-# entirely otherwise (uploading a zip, SFTP, or `git pull` over SSH).
+# entirely otherwise (zip upload, SFTP, or `git pull` over SSH).
 #
-# EDIT THE FIRST LINE: replace deamco with your cPanel username, and
-# adjust the target if you are not deploying to a subdomain called
-# "cricauction". The path must be absolute — cPanel rejects relative ones.
+# Configured for a SUBFOLDER install:
 #
-# Note what is NOT copied: .env (it lives on the server and must never be
-# overwritten by a deploy), storage/ (runtime logs), tests/ and deploy/
-# (not needed in production).
+#     /home/deamco/public_html/APL   ->   https://deam.co.in/APL
 #
-# After editing, commit this file, then in cPanel:
-#   Git Version Control -> Manage -> Pull or Deploy -> Update from Remote
-#                                                   -> Deploy HEAD Commit
+# The root .htaccess rewrites every request into public/, so the URL never
+# shows /public, and app/, config/, database/ and storage/ each carry their
+# own deny rule. Copying .htaccess is therefore NOT optional — without it
+# the whole project directory is readable over HTTP.
+#
+# Deploying to a subdomain instead? Point DEPLOYPATH at the project
+# directory (e.g. /home/deamco/cricauction) and set that domain's document
+# root to <DEPLOYPATH>/public.
+#
+# NOT copied: .env (lives on the server; a deploy must never overwrite your
+# credentials), tests/ and deploy/ (no use in production).
+#
+# In cPanel: Git Version Control -> Manage -> Pull or Deploy
+#            -> Update from Remote -> Deploy HEAD Commit
 
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/deamco/cricauction
+    - export DEPLOYPATH=/home/deamco/public_html/APL
 
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/mkdir -p $DEPLOYPATH/storage/logs
 
+    # Application code. Each of these directories carries its own
+    # .htaccess deny, which cp -R brings along.
     - /bin/cp -R app       $DEPLOYPATH/
     - /bin/cp -R config    $DEPLOYPATH/
     - /bin/cp -R public    $DEPLOYPATH/
     - /bin/cp -R database  $DEPLOYPATH/
-    - /bin/cp .env.example $DEPLOYPATH/.env.example
 
-    # The SQL fixtures are only needed for the initial import. Leaving them
-    # on the server is a needless disclosure risk.
+    # The rewrite + guard. The site is broken without it, and unsafe.
+    - /bin/cp .htaccess    $DEPLOYPATH/
+    - /bin/cp .env.example $DEPLOYPATH/
+
+    # SQL fixtures are only needed for the one-time import. Leaving them on
+    # the server is a needless disclosure risk.
     - /bin/rm -f $DEPLOYPATH/database/seed.sql
     - /bin/rm -f $DEPLOYPATH/database/seed_match.sql
 
     - /bin/find $DEPLOYPATH -type d -exec chmod 755 {} \;
     - /bin/find $DEPLOYPATH -type f -exec chmod 644 {} \;
-    - /bin/chmod 755 $DEPLOYPATH/storage/logs
+    - /bin/chmod 755 $DEPLOYPATH/storage $DEPLOYPATH/storage/logs

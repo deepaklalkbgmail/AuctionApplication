@@ -123,15 +123,26 @@ version in Step 0.
 
 ## Step 3 — Upload the code
 
-Pick whichever you're comfortable with.
+**Where it goes depends on Step 4.** Decide that first:
+
+| Situation | Upload to | URL |
+|-----------|-----------|-----|
+| The domain is free, or you can add a subdomain | `/home/deamco/cricauction` (outside `public_html`) | `https://auction.yourdomain.com` |
+| The domain already runs another site | `/home/deamco/public_html/APL` | `https://deam.co.in/APL` |
+
+The first is safer — the app sits physically outside the web root. Use the
+second only when the domain is already taken; the guards described in Step 4
+make it safe, but they depend on Apache honouring `.htaccess`.
+
+Then pick whichever upload method you're comfortable with.
 
 ### Option A — cPanel Git™ Version Control (best for updating later)
 
 1. **cPanel → Files → Git™ Version Control → Create.**
 2. Tick **Clone a Repository**, paste the HTTPS or SSH URL, set
    **Repository Path** to `/home/deamco/cricauction`.
-3. `.cpanel.yml` in the repo is already set to `/home/deamco/cricauction`.
-   If your home directory differs, edit that path, commit and push.
+3. `.cpanel.yml` is already set to `/home/deamco/public_html/APL`. Change
+   `DEPLOYPATH` if you are deploying elsewhere, then commit and push.
 4. Back in cPanel: **Manage → Pull or Deploy → Update from Remote**, then
    **Deploy HEAD Commit**.
 
@@ -140,31 +151,26 @@ Later updates are then two clicks.
 ### Option B — Zip upload (simplest)
 
 1. Download the repo as a ZIP from GitHub.
-2. **cPanel → File Manager**, navigate to `/home/deamco` (**not**
-   `public_html`), **Upload**, then **Extract**.
-3. Rename the extracted folder to `cricauction`.
+2. **cPanel → File Manager**, navigate to your target from the table above,
+   **Upload**, then **Extract**.
+3. Rename the extracted folder (`cricauction`, or `APL` for a subfolder
+   install).
+
+GitHub's ZIP nests everything inside a folder like
+`AuctionApplication-main/` — make sure `public/`, `app/` and `.htaccess` end
+up directly inside your target folder, not one level deeper. Turn on
+**Settings → Show Hidden Files** first, or the `.htaccess` files will not be
+extracted where you can see them.
 
 ### Option C — SFTP
 
 Upload the whole project to `/home/deamco/cricauction`.
 
-### Where it goes, and why
-
-```
-/home/deamco/
-├── cricauction/          ← the whole app lives here, OUTSIDE public_html
-│   ├── app/  config/  database/  storage/
-│   ├── .env              ← created in Step 5
-│   └── public/           ← only THIS is web-facing
-└── public_html/
-```
-
-Keeping the app above `public_html` means `.env`, your database password and
-every PHP source file are physically unreachable over HTTP, no configuration
-required. It is the single most valuable thing you can do for security here.
-
-**Do not upload:** `tests/`, `deploy/`, `.git/`, `node_modules/`. They are
-harmless but pointless on a production server.
+**Do not upload:** `tests/`, `deploy/`, `.git/`, `node_modules/` — harmless
+but pointless in production. **Do upload every `.htaccess`**: the one at the
+project root and the ones inside `app/`, `config/`, `database/` and
+`storage/`. On a subfolder install they are what keeps your credentials
+private.
 
 ---
 
@@ -187,21 +193,52 @@ That's it — this is the layout the app was designed for.
 **cPanel → Domains**, find the domain, click the pencil / **Manage** beside
 its document root, and change it to `/home/deamco/cricauction/public`.
 
-### If your host won't let you change the document root
+### Subfolder of an existing site (e.g. `deam.co.in/APL`)
 
-Then the app has to sit inside `public_html`. Put the whole project at
-`public_html/cricauction/` and reach it at
-`yourdomain.com/cricauction/public/`.
+If the domain already serves another website, you cannot repoint its
+document root — the other site would break. Install into a subfolder of
+`public_html` instead:
 
-This is why the repo ships **two `.htaccess` files**: the one at the project
-root denies everything, and `public/.htaccess` re-grants only that directory.
-I tested exactly this layout — `/config/db.php`, `/.env`, `/database/seed.sql`,
-`/app/Core/Auth.php` and the logs all return **403**, while `public/index.php`
-serves normally.
+```
+/home/deamco/public_html/
+├── index.php  …            ← the existing deam.co.in site, untouched
+└── APL/                    ← this app
+    ├── .htaccess           ← rewrites into public/ and guards the rest
+    ├── app/ config/ database/ storage/   ← each has its own deny
+    ├── .env
+    └── public/
+```
 
-It works, but it depends on Apache honouring `.htaccess` (`AllowOverride All`,
-which cPanel sets by default). One misconfiguration and your database password
-is a public URL. Use a subdomain if you possibly can.
+The URL stays clean — **`https://deam.co.in/APL`**, not `/APL/public`. The
+root `.htaccess` rewrites every request into `public/` internally, so the
+browser never sees that directory.
+
+**Why the guards are shaped the way they are.** Apache evaluates
+authorization *before* mod_rewrite's per-directory fixup runs. A blanket
+`Require all denied` at the project root would therefore reject the request
+before the rewrite ever happened, and the whole app would 403 — I hit
+exactly that while testing. So the private directories each carry their own
+`.htaccess` deny instead. Those are authorization-phase rules, which means
+they hold whether or not mod_rewrite is available.
+
+An `.htaccess` governs HTTP requests only; PHP including `config/config.php`
+from disk is unaffected.
+
+Set `APP_URL=https://deam.co.in/APL` in Step 5 — with the subfolder, and no
+trailing slash. Login redirects are built from it.
+
+Tested against Apache 2.4 with `AllowOverride All` in exactly this layout:
+the existing root site keeps serving; `/APL/`, `/APL/score.php`,
+`/APL/login.php` and `/APL/api/*.php` all resolve; `/APL` without the slash
+301s to `/APL/` so relative asset and API paths resolve correctly; and
+`/APL/.env`, `/APL/config/db.php`, `/APL/app/Core/Auth.php`,
+`/APL/database/seed.sql`, `/APL/tests/`, the log and every dotfile return
+**403** with nothing disclosed.
+
+One caveat: this relies on the host honouring `.htaccess`
+(`AllowOverride All`, cPanel's default) and having `mod_rewrite` enabled —
+both are near-universal on cPanel. A subdomain with its own document root
+needs neither, so prefer that when the domain is free.
 
 ---
 

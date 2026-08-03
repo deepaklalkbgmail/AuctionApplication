@@ -1,31 +1,70 @@
 # =====================================================================
-#  Root guard — deny everything.
+#  Project-root .htaccess
 # =====================================================================
 #
-#  The app is designed to be served with `public/` as the document root,
-#  in which case Apache never sees this file and it does nothing.
+#  Only read when the project root itself is web-reachable — that is, a
+#  subfolder install such as:
 #
-#  It exists for the case that goes wrong on shared hosting: someone
-#  uploads the WHOLE repository inside public_html. Without this, the
-#  world could fetch /config/db.php, /.env, /database/seed.sql and the
-#  entire app/ directory as plain text — every credential in the project.
+#      public_html/APL/   ->   https://deam.co.in/APL
 #
-#  public/.htaccess re-grants access to just that directory, so the site
-#  still works while everything above it stays sealed.
+#  With the recommended setup (document root pointed straight at public/)
+#  Apache never reads this file and none of it applies.
 #
-#  This is a safety net, not a substitute for setting the document root
-#  correctly. See DEPLOY-CPANEL.md.
+#  It does two jobs:
+#
+#  1. Rewrites every request into public/, so the URL stays
+#     /APL/score.php rather than /APL/public/score.php.
+#
+#  2. Keeps app/, config/, database/, storage/ and the dotfiles
+#     unreachable.
+#
+#  Why the guards are NOT a blanket "Require all denied" here: Apache
+#  evaluates authorization BEFORE mod_rewrite's per-directory fixup runs,
+#  so a deny at this level would reject the request before the rewrite
+#  ever happened, and the whole app would 403. The private directories
+#  each carry their own .htaccess instead — those are authorization-phase
+#  rules, so they hold whether or not mod_rewrite is available.
+#
+#  (An .htaccess only governs HTTP requests. PHP's own require of
+#  config/config.php is filesystem access and is entirely unaffected.)
 
-<IfModule mod_authz_core.c>
-    # Apache 2.4 (what cPanel runs)
-    Require all denied
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    # Refuse the private tree outright, before anything is rewritten.
+    RewriteRule ^(app|config|database|storage|tests|deploy)(/|$) - [F,L]
+
+    # Already inside public/ — stop. This is what prevents a rewrite loop.
+    RewriteRule ^public/ - [L]
+
+    # Everything else is served out of public/, invisibly.
+    RewriteRule ^(.*)$ public/$1 [L]
 </IfModule>
 
-<IfModule !mod_authz_core.c>
-    # Apache 2.2 fallback
-    Order allow,deny
-    Deny from all
-</IfModule>
+# ---------------------------------------------------------------------
+#  Authorization-phase guards. These apply even with mod_rewrite off.
+# ---------------------------------------------------------------------
 
-# No directory listings anywhere, even if something is granted below.
+# .env, .htaccess, .cpanel.yml, .git remnants, editor droppings.
+<FilesMatch "^\.">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
+# Source, data and docs that must never be served as text.
+<FilesMatch "\.(sql|md|yml|yaml|lock|json|ini|log|bak|orig|swp|dist|sh)$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
+</FilesMatch>
+
 Options -Indexes

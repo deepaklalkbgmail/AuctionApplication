@@ -1,0 +1,18 @@
+# Never reachable over HTTP.
+#
+# This directory holds application source, credentials or runtime data.
+# The deny is evaluated in Apache's authorization phase, so it holds even
+# when mod_rewrite is unavailable and regardless of how the document root
+# is configured.
+#
+# This affects HTTP requests only — PHP including these files from disk is
+# unaffected.
+
+<IfModule mod_authz_core.c>
+    Require all denied
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    Order allow,deny
+    Deny from all
+</IfModule>
