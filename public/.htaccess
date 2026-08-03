@@ -46,6 +46,37 @@ DirectoryIndex index.php
 #  attacker probes.
 # ---------------------------------------------------------------------
 <IfModule mod_headers.c>
+    # -----------------------------------------------------------------
+    #  Content-Security-Policy
+    #
+    #  A parent .htaccess (the site already living at the domain root) or
+    #  a server-level policy cascades into this directory. If that policy
+    #  is `script-src 'self'`, it blocks this app's JavaScript and the
+    #  page renders unstyled and inert.
+    #
+    #  So we unset whatever was inherited and declare our own. `unset`
+    #  must come first: Apache appends this file's directives after the
+    #  parent's, so without it both policies apply and the browser
+    #  enforces the intersection — the strictest of the two.
+    #
+    #  The policy below is deliberately tight. Every asset is same-origin
+    #  (Tailwind is prebuilt, Alpine is vendored, no web fonts), so there
+    #  is not a single external host to allow. Two relaxations remain:
+    #
+    #    'unsafe-eval'   Alpine.js compiles x-data / @click expressions
+    #                    with the Function constructor. Removing this
+    #                    needs Alpine's CSP build and a rewrite of every
+    #                    expression into registered components.
+    #    'unsafe-inline' (styles only) a handful of style="" attributes
+    #                    carry a team's colour straight from the database.
+    #
+    #  Neither weakens script injection defence the way script-src
+    #  'unsafe-inline' would — that one is NOT present.
+    # -----------------------------------------------------------------
+    Header always unset Content-Security-Policy
+    Header always unset Content-Security-Policy-Report-Only
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'; object-src 'none'"
+
     Header always set X-Content-Type-Options "nosniff"
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"

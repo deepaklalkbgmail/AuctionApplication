@@ -166,7 +166,8 @@ extracted where you can see them.
 
 Upload the whole project to `/home/deamco/cricauction`.
 
-**Do not upload:** `tests/`, `deploy/`, `.git/`, `node_modules/` — harmless
+**Do not upload:** `tests/`, `deploy/`, `resources/`, `tailwind.config.js`,
+`.git/`, `node_modules/` — build-time or development only, harmless
 but pointless in production. **Do upload every `.htaccess`**: the one at the
 project root and the ones inside `app/`, `config/`, `database/` and
 `storage/`. On a subfolder install they are what keeps your credentials
@@ -307,6 +308,37 @@ database name, and `[2002]` is a wrong host.
 
 ---
 
+### A note on Content-Security-Policy
+
+If the site already at the domain root sets a CSP, Apache cascades it into
+`/APL` too — and a policy of `script-src 'self'` blocks this app's
+JavaScript, leaving an unstyled, inert page.
+
+`public/.htaccess` handles this: it unsets whatever was inherited and
+declares the app's own policy. `unset` has to come first, because Apache
+appends this file's directives after the parent's; without it both policies
+apply and the browser enforces the stricter intersection.
+
+The app ships no external dependencies at all — Tailwind is prebuilt into
+`public/assets/css/app.css`, Alpine is vendored at
+`public/assets/js/alpine.js`, and there are no web fonts — so its policy
+allows no third-party origin. Two relaxations remain, both documented inline
+in `public/.htaccess`: `'unsafe-eval'` because Alpine compiles `x-data` and
+`@click` expressions with the `Function` constructor, and `'unsafe-inline'`
+for **styles only**, because a few `style=""` attributes carry a team's
+colour straight from the database. `script-src 'unsafe-inline'` — the one
+that actually matters for injection — is not granted.
+
+If you change any markup, rebuild the stylesheet, or classes you added will
+be missing:
+
+```bash
+npx tailwindcss@3 -c tailwind.config.js -i resources/app.css \
+    -o public/assets/css/app.css --minify
+```
+
+---
+
 ## Step 6 — Enable HTTPS (not optional)
 
 With `APP_ENV=production` the session cookie is marked `Secure`, so the
@@ -434,6 +466,7 @@ Seeded logins (only if you imported `seed.sql`) — all with password
 | `CHECK` errors on import | MySQL too old, or partially imported | Step 0 |
 | Bids/balls don't save, page looks fine | Session or CSRF failure | Confirm HTTPS, and that `session.save_path` is writable |
 | 403 on every page | Document root points at the project root, not `public/` | Step 4 |
+| Unstyled page + **"Refused to load … violates Content-Security-Policy"** in the console | A parent site's `.htaccess`, or a server-level policy, is cascading a stricter CSP into this directory | `public/.htaccess` already unsets the inherited policy and sets its own. Make sure that file was uploaded and that `mod_headers` is enabled |
 
 **Where the errors are:** `storage/logs/php-error.log` (the app's own log) and
 **cPanel → Metrics → Errors** (Apache's). Between them they explain nearly

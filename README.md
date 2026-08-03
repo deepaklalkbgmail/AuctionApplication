@@ -3,7 +3,7 @@
 A sports-oriented web application for running **player auctions** and **ball-by-ball live scoring**
 for cricket tournaments.
 
-**Stack:** PHP 8.1+ (OOP, PDO) · MySQL 8.0.16+ / MariaDB 10.2.1+ · Tailwind CSS (CDN) · Alpine.js
+**Stack:** PHP 8.1+ (OOP, PDO) · MySQL 8.0.16+ / MariaDB 10.2.1+ · Tailwind CSS (prebuilt) · Alpine.js (vendored) — no external CDN, no build step on the server
 
 **Deploying to shared hosting?** → **[DEPLOY-CPANEL.md](DEPLOY-CPANEL.md)**
 

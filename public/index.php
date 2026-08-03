@@ -187,82 +187,21 @@ $bootstrap = Security::json([
     <meta name="theme-color" content="#020617">
     <title><?= e(APP_NAME) ?> — Live Auction</title>
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            darkMode: 'class',
-            theme: {
-                extend: {
-                    colors: {
-                        ink:    { 900: '#020617', 800: '#0b1220', 700: '#111a2e' },
-                        accent: { DEFAULT: '#22c55e', soft: '#4ade80' },
-                        gold:   '#fbbf24',
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
-                        mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
-                    },
-                    keyframes: {
-                        pulseRing: {
-                            '0%':   { boxShadow: '0 0 0 0 rgba(34,197,94,.45)' },
-                            '70%':  { boxShadow: '0 0 0 18px rgba(34,197,94,0)' },
-                            '100%': { boxShadow: '0 0 0 0 rgba(34,197,94,0)' },
-                        },
-                        slideUp: {
-                            '0%':   { opacity: 0, transform: 'translateY(8px)' },
-                            '100%': { opacity: 1, transform: 'translateY(0)' },
-                        },
-                        ticker: {
-                            '0%':   { opacity: 0, transform: 'translateX(-10px)' },
-                            '100%': { opacity: 1, transform: 'translateX(0)' },
-                        },
-                    },
-                    animation: {
-                        'pulse-ring': 'pulseRing 2s infinite',
-                        'slide-up':   'slideUp .35s ease-out both',
-                        'ticker-in':  'ticker .3s ease-out both',
-                    },
-                },
-            },
-        };
-    </script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+    <!-- Self-hosted. Tailwind is built ahead of time (see tailwind.config.js)
+         and Alpine is vendored, so the page needs no external origin and
+         satisfies a `script-src 'self'` / `style-src 'self'` policy. -->
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%2322c55e%22%2F%3E%3Cpath%20d%3D%22M8.5%2024%2019%2013.5M17.5%206.5%2025.5%2014.5%2021.5%2018.5%2013.5%2010.5z%22%20stroke%3D%22%23020617%22%20stroke-width%3D%222.6%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%2224.5%22%20r%3D%222.3%22%20fill%3D%22%23020617%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="assets/css/app.css">
 
-    <style>
-        [x-cloak] { display: none !important; }
+    <!-- Order matters: Alpine calls start() as soon as it runs, so the
+         component that x-data references must already be defined. Deferred
+         scripts execute in document order, which guarantees that. -->
+    <script defer src="assets/js/auction.js"></script>
+    <script defer src="assets/js/alpine.js"></script>
 
-        body {
-            background:
-                radial-gradient(1100px 520px at 12% -8%, rgba(34,197,94,.14), transparent 60%),
-                radial-gradient(900px 460px at 92% 4%, rgba(56,189,248,.12), transparent 62%),
-                #020617;
-        }
-
-        .panel {
-            background: linear-gradient(160deg, rgba(255,255,255,.055), rgba(255,255,255,.015));
-            border: 1px solid rgba(255,255,255,.08);
-            backdrop-filter: blur(14px);
-        }
-
-        .stitch {
-            background-image: repeating-linear-gradient(90deg,
-                rgba(255,255,255,.16) 0 6px, transparent 6px 14px);
-        }
-
-        /* Hide scrollbars on the horizontal queue rail without losing scroll */
-        .no-bar { scrollbar-width: none; }
-        .no-bar::-webkit-scrollbar { display: none; }
-
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after { animation-duration: .001ms !important; transition-duration: .001ms !important; }
-        }
-    </style>
 </head>
 
-<body class="min-h-screen font-sans text-slate-200 antialiased selection:bg-emerald-400/30">
+<body class="bg-arena min-h-screen font-sans text-slate-200 antialiased selection:bg-emerald-400/30">
 
 <div x-data="auctionScreen(<?= e($bootstrap) ?>)" x-cloak class="min-h-screen pb-28 lg:pb-8">
 
@@ -447,7 +386,7 @@ $bootstrap = Security::json([
                                             :stroke="secondsLeft <= 5 ? '#f43f5e' : (secondsLeft <= 10 ? '#fbbf24' : '#22c55e')"
                                             :stroke-dasharray="276.5"
                                             :stroke-dashoffset="276.5 - (276.5 * Math.max(0, secondsLeft) / timer)"
-                                            style="transition: stroke-dashoffset .95s linear"/>
+                                            class="ring-sweep"/>
                                 </svg>
                                 <div class="text-center">
                                     <p class="font-mono text-3xl font-black leading-none"
@@ -721,8 +660,7 @@ $bootstrap = Security::json([
 
     <!-- ===================== MOBILE BOTTOM BAR ===================== -->
     <?php if ($role === Auth::ROLE_OWNER): ?>
-        <div class="fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink-900/95 px-4 py-3 backdrop-blur-xl lg:hidden"
-             style="padding-bottom: max(0.75rem, env(safe-area-inset-bottom))">
+        <div class="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-white/10 bg-ink-900/95 px-4 py-3 backdrop-blur-xl lg:hidden">
             <div class="flex items-center gap-3">
                 <div class="min-w-0">
                     <p class="text-[9px] font-bold uppercase tracking-wider text-slate-500">Current</p>
@@ -754,272 +692,5 @@ $bootstrap = Security::json([
     </div>
 </div>
 
-<script>
-/**
- * Auction screen behaviour.
- *
- * Two modes:
- *   live  — bids POST to api/auction.php and the screen polls the server for
- *           state. The server is the only authority on who is leading.
- *   local — no database or no session behind the page: bids resolve
- *           optimistically in the browser so the UI stays reviewable.
- *
- * The purse and squad checks below are a fast pre-check for the button
- * states, never the enforcement. AuctionService re-runs all of them inside
- * the transaction, and only its answer changes any money.
- */
-function auctionScreen(initial) {
-    return {
-        ...initial,
-        paused: false,
-        flash: false,
-        toasts: [],
-        _seq: 0,
-
-        init() {
-            this.bids = this.bids.map((b, i) => ({ ...b, id: 'seed-' + i }));
-
-            setInterval(() => {
-                if (this.paused || this.secondsLeft <= 0) return;
-
-                this.secondsLeft--;
-
-                if (this.secondsLeft === 0) {
-                    this.toast(
-                        this.leader ? `Going once… ${this.leader.short} leads` : 'No bids — lot closing',
-                        'muted'
-                    );
-                }
-            }, 1000);
-
-            // Poll for other teams' bids. Phase 4 swaps this for SSE; the
-            // apply step stays the same either way.
-            if (this.live) {
-                setInterval(() => this.refresh(), 3000);
-            }
-        },
-
-        // ---------------------------------------------------------- getters
-        get myTeam() {
-            return this.teams.find(t => t.id === this.myTeamId) || null;
-        },
-
-        get leader() {
-            return this.teams.find(t => t.id === this.leaderId) || null;
-        },
-
-        get isLeading() {
-            return this.myTeamId !== null && this.leaderId === this.myTeamId;
-        },
-
-        get sortedTeams() {
-            return [...this.teams].sort((a, b) => b.remaining - a.remaining);
-        },
-
-        // ---------------------------------------------------------- helpers
-        nextBid(steps = 1) {
-            return this.currentBid + this.increment * steps;
-        },
-
-        /** Client-side mirror of the server's purse + squad guard. */
-        canAfford(amount) {
-            const team = this.myTeam;
-            if (!team) return false;
-            if (team.bought >= this.maxSquad) return false;
-
-            // Hold back enough to fill every remaining slot at the league's
-            // minimum base price — a team may not spend itself below a legal squad.
-            const slotsAfter = this.maxSquad - team.bought - 1;
-            const reserve = slotsAfter * this.minBase;
-
-            return amount + reserve <= team.remaining;
-        },
-
-        /** 3250000 -> "₹32.5 L" — mirrors Security::money() on the PHP side. */
-        fmt(amount) {
-            if (amount >= 1e7) return '₹' + (amount / 1e7).toFixed(2).replace(/\.?0+$/, '') + ' Cr';
-            if (amount >= 1e5) return '₹' + (amount / 1e5).toFixed(2).replace(/\.?0+$/, '') + ' L';
-            return '₹' + Math.round(amount).toLocaleString('en-IN');
-        },
-
-        // ----------------------------------------------------------- actions
-        async placeBid(steps = 1) {
-            const amount = this.nextBid(steps);
-            const team = this.myTeam;
-
-            // Pre-checks, so an obviously doomed bid costs no round trip.
-            if (!team) return this.toast('Only team owners can bid', 'error');
-            if (this.isLeading) return this.toast('You already hold the highest bid', 'muted');
-            if (team.bought >= this.maxSquad) return this.toast('Squad is full', 'error');
-            if (!this.canAfford(amount)) {
-                return this.toast(`Insufficient purse — ${this.fmt(team.remaining)} left`, 'error');
-            }
-
-            if (this.live) {
-                const res = await this.post('bid', { lot_id: this.lotId, amount: amount.toFixed(2) });
-                if (res) {
-                    this.applyLot(res.lot);
-                    this.toast(`Bid placed: ${this.fmt(amount)}`, 'success');
-                    this.refresh();
-                }
-                return;
-            }
-
-            // Local preview mode.
-            this.currentBid = amount;
-            this.leaderId = team.id;
-            this.bidCount++;
-            this.secondsLeft = this.timer;   // anti-snipe: each bid resets the clock
-
-            this.bids.unshift({
-                id: 'local-' + (++this._seq),
-                amount,
-                short: team.short,
-                team: team.name,
-                color: team.color,
-                at: new Date().toLocaleTimeString('en-GB'),
-            });
-
-            this.pulse();
-            this.toast(`Bid placed: ${this.fmt(amount)}`, 'success');
-        },
-
-        async hammer(outcome) {
-            if (outcome === 'sold' && !this.leader) {
-                return this.toast('No bids to close', 'error');
-            }
-
-            if (this.live) {
-                const res = await this.post(outcome === 'sold' ? 'sell' : 'unsold', { lot_id: this.lotId });
-                if (res) {
-                    this.toast(
-                        outcome === 'sold'
-                            ? `SOLD — ${res.player} to ${res.team} for ${this.fmt(parseFloat(res.price))}`
-                            : `${res.player} goes unsold`,
-                        outcome === 'sold' ? 'success' : 'muted'
-                    );
-                    this.paused = true;
-                    this.secondsLeft = 0;
-                    this.refresh();
-                }
-                return;
-            }
-
-            // Local preview mode.
-            if (outcome === 'sold') {
-                const team = this.leader;
-                team.spent += this.currentBid;
-                team.remaining = team.total - team.spent;
-                team.bought++;
-
-                this.toast(`SOLD — ${this.playerName} to ${team.name} for ${this.fmt(this.currentBid)}`, 'success');
-            } else {
-                this.toast(`${this.playerName} goes unsold`, 'muted');
-            }
-
-            this.paused = true;
-            this.secondsLeft = 0;
-        },
-
-        // -------------------------------------------------------------- api
-        /** POST an action. Returns the payload, or null after showing why not. */
-        async post(action, fields) {
-            const body = new URLSearchParams({ action, csrf_token: this.csrf, ...fields });
-
-            try {
-                const res = await fetch(this.apiUrl, {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'X-CSRF-Token': this.csrf, 'Accept': 'application/json' },
-                    body,
-                });
-
-                const data = await res.json();
-
-                if (!data.ok) {
-                    this.toast(data.message || 'That bid was rejected', 'error');
-                    this.refresh();          // our view of the lot was stale
-                    return null;
-                }
-
-                return data;
-            } catch (e) {
-                this.toast('Could not reach the auction server', 'error');
-                return null;
-            }
-        },
-
-        /** Pull authoritative state; the server wins every disagreement. */
-        async refresh() {
-            try {
-                const url = `${this.apiUrl}?action=state&tournament_id=${this.tournamentId}`;
-                const res = await fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } });
-                const data = await res.json();
-
-                if (!data.ok || !data.lot) return;
-
-                this.applyLot({
-                    current_bid: data.lot.current_bid,
-                    bid_count: data.lot.bid_count,
-                    current_bidder_team_id: data.lot.bidder_team_id,
-                    ends_at: data.lot.ends_at,
-                });
-
-                this.teams = data.teams.map(t => ({
-                    id: +t.id, name: t.name, short: t.short_name, color: t.primary_color,
-                    total: +t.purse_total, spent: +t.purse_spent,
-                    remaining: +t.purse_remaining, bought: +t.players_bought,
-                }));
-
-                this.bids = data.bids.map((b, i) => ({
-                    id: 'srv-' + i,
-                    amount: +b.bid_amount,
-                    short: b.short_name,
-                    team: b.team_name,
-                    color: b.primary_color,
-                    at: (b.placed_at || '').slice(11, 19),
-                }));
-            } catch (e) {
-                /* a dropped poll is not worth interrupting the auction for */
-            }
-        },
-
-        applyLot(lot) {
-            if (!lot) return;
-
-            const bid = parseFloat(lot.current_bid);
-            if (!Number.isNaN(bid) && bid !== this.currentBid) this.pulse();
-
-            if (!Number.isNaN(bid)) this.currentBid = bid;
-            if (lot.bid_count !== undefined) this.bidCount = +lot.bid_count;
-
-            this.leaderId = lot.current_bidder_team_id === null || lot.current_bidder_team_id === undefined
-                ? null
-                : +lot.current_bidder_team_id;
-
-            if (lot.seconds_left !== undefined && lot.seconds_left !== null) {
-                this.secondsLeft = Math.max(0, +lot.seconds_left);
-            } else if (lot.ends_at) {
-                // MySQL DATETIME has no zone; the server runs on UTC.
-                const ends = Date.parse(lot.ends_at.replace(' ', 'T') + 'Z');
-                if (!Number.isNaN(ends)) {
-                    this.secondsLeft = Math.max(0, Math.round((ends - Date.now()) / 1000));
-                }
-            }
-        },
-
-        pulse() {
-            this.flash = true;
-            setTimeout(() => (this.flash = false), 220);
-        },
-
-        toast(message, kind = 'muted') {
-            const id = ++this._seq;
-            this.toasts.push({ id, message, kind });
-            setTimeout(() => (this.toasts = this.toasts.filter(t => t.id !== id)), 3200);
-        },
-    };
-}
-</script>
 </body>
 </html>

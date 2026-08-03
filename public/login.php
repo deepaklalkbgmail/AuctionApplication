@@ -45,20 +45,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign in — <?= e(APP_NAME) ?></title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: Inter, system-ui, sans-serif;
-            background:
-                radial-gradient(900px 460px at 15% -10%, rgba(34,197,94,.16), transparent 60%),
-                radial-gradient(700px 400px at 90% 8%, rgba(56,189,248,.12), transparent 62%),
-                #020617;
-        }
-    </style>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%2322c55e%22%2F%3E%3Cpath%20d%3D%22M8.5%2024%2019%2013.5M17.5%206.5%2025.5%2014.5%2021.5%2018.5%2013.5%2010.5z%22%20stroke%3D%22%23020617%22%20stroke-width%3D%222.6%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%2224.5%22%20r%3D%222.3%22%20fill%3D%22%23020617%22%2F%3E%3C%2Fsvg%3E">
+    <link rel="stylesheet" href="assets/css/app.css">
+
 </head>
-<body class="grid min-h-screen place-items-center px-4 text-slate-200">
+<body class="bg-gate grid min-h-screen place-items-center px-4 font-sans text-slate-200">
 
     <main class="w-full max-w-sm">
         <div class="mb-7 flex items-center gap-3">
