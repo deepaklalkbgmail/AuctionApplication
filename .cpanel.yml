@@ -4,7 +4,7 @@
 # Only used if you deploy via cPanel -> Git Version Control. Ignored
 # entirely otherwise (uploading a zip, SFTP, or `git pull` over SSH).
 #
-# EDIT THE FIRST LINE: replace CPUSER with your cPanel username, and
+# EDIT THE FIRST LINE: replace deamco with your cPanel username, and
 # adjust the target if you are not deploying to a subdomain called
 # "cricauction". The path must be absolute — cPanel rejects relative ones.
 #
@@ -18,7 +18,7 @@
 
 deployment:
   tasks:
-    - export DEPLOYPATH=/home/CPUSER/cricauction
+    - export DEPLOYPATH=/home/deamco/cricauction
 
     - /bin/mkdir -p $DEPLOYPATH
     - /bin/mkdir -p $DEPLOYPATH/storage/logs

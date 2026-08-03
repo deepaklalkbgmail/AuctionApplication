@@ -25,7 +25,7 @@
 --  SHARED HOSTING (cPanel / Plesk): DELETE the next two statements.
 --
 --  cPanel creates the database for you and prefixes its name
---  (cpaneluser_cricauction), and the MySQL user it issues has no
+--  (deamco_APL), and the MySQL user it issues has no
 --  CREATE DATABASE privilege — so both statements will fail. Create the
 --  database in cPanel first, then import the rest of this file into it.
 --

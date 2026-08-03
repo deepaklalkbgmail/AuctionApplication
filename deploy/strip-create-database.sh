@@ -3,7 +3,7 @@
 # Produce cPanel-ready copies of the SQL files.
 #
 # On shared hosting you cannot CREATE DATABASE from SQL — cPanel creates it
-# for you under a prefixed name (cpaneluser_cricauction) and the MySQL user
+# for you under a prefixed name (deamco_APL) and the MySQL user
 # it issues has no such privilege. This strips the CREATE DATABASE / USE
 # statements so the files import cleanly into a database you already made.
 #

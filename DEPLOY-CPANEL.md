@@ -61,17 +61,23 @@ weaker than having the database enforce them.
 
 **cPanel → Databases → MySQL® Databases.**
 
-1. **Create New Database** — name it `cricauction`. cPanel prefixes it, so you
-   end up with something like `cpuser_cricauction`. **Write the full name
-   down**, prefix included.
-2. **Add New User** — e.g. `cricapp`, becoming `cpuser_cricapp`. Use the
-   password generator and save it somewhere safe.
-3. **Add User To Database** — grant **ALL PRIVILEGES**.
+On this account the prefix `deamco_` is mandatory — cPanel adds it for you and
+it cannot be removed.
 
-> The app itself only needs `SELECT, INSERT, UPDATE, DELETE`. But the import in
-> Step 2 needs `CREATE`, `INDEX` and `REFERENCES`. Grant ALL for the import,
-> and if you want to tighten it afterwards, revoke the DDL rights once the
-> tables exist.
+1. **Create New Database** — type `APL` in the box. cPanel shows the prefix
+   beside it, so the database is created as **`deamco_APL`**.
+2. **Add New User** — type `dpk`, giving **`deamco_dpk`**. Set the password and
+   save it somewhere safe (a password manager, not a text file on your desktop).
+3. **Add User To Database** — pick `deamco_dpk` and `deamco_APL`, grant
+   **ALL PRIVILEGES**.
+
+> **Case matters.** On Linux, MySQL database names are case-sensitive:
+> `deamco_APL` and `deamco_apl` are two different databases. Copy the name
+> exactly as cPanel displays it.
+
+> The app itself only needs `SELECT, INSERT, UPDATE, DELETE`. The import in
+> Step 2 additionally needs `CREATE`, `INDEX` and `REFERENCES`. Grant ALL for
+> the import; you can revoke the DDL rights afterwards once the tables exist.
 
 ---
 
@@ -94,7 +100,7 @@ delete the block marked `SHARED HOSTING … DELETE the next two statements` —
 the `CREATE DATABASE …;` statement and the `USE \`cric_auction\`;` line. Do the
 same `USE` line in `seed.sql` and `seed_match.sql`.
 
-Then **phpMyAdmin → select `cpuser_cricauction` in the left sidebar → Import**,
+Then **phpMyAdmin → select `deamco_APL` in the left sidebar → Import**,
 and import **in this order**:
 
 | # | File | Required? |
@@ -123,9 +129,9 @@ Pick whichever you're comfortable with.
 
 1. **cPanel → Files → Git™ Version Control → Create.**
 2. Tick **Clone a Repository**, paste the HTTPS or SSH URL, set
-   **Repository Path** to `/home/CPUSER/cricauction`.
-3. Edit `.cpanel.yml` in the repo — replace `CPUSER` with your cPanel username
-   — commit and push.
+   **Repository Path** to `/home/deamco/cricauction`.
+3. `.cpanel.yml` in the repo is already set to `/home/deamco/cricauction`.
+   If your home directory differs, edit that path, commit and push.
 4. Back in cPanel: **Manage → Pull or Deploy → Update from Remote**, then
    **Deploy HEAD Commit**.
 
@@ -134,18 +140,18 @@ Later updates are then two clicks.
 ### Option B — Zip upload (simplest)
 
 1. Download the repo as a ZIP from GitHub.
-2. **cPanel → File Manager**, navigate to `/home/CPUSER` (**not**
+2. **cPanel → File Manager**, navigate to `/home/deamco` (**not**
    `public_html`), **Upload**, then **Extract**.
 3. Rename the extracted folder to `cricauction`.
 
 ### Option C — SFTP
 
-Upload the whole project to `/home/CPUSER/cricauction`.
+Upload the whole project to `/home/deamco/cricauction`.
 
 ### Where it goes, and why
 
 ```
-/home/CPUSER/
+/home/deamco/
 ├── cricauction/          ← the whole app lives here, OUTSIDE public_html
 │   ├── app/  config/  database/  storage/
 │   ├── .env              ← created in Step 5
@@ -172,14 +178,14 @@ The web server must serve **`cricauction/public`**, not the project root.
 
 - Domain: `auction.yourdomain.com`
 - Untick *"Share document root"*
-- **Document Root:** `/home/CPUSER/cricauction/public`
+- **Document Root:** `/home/deamco/cricauction/public`
 
 That's it — this is the layout the app was designed for.
 
 ### Existing domain
 
 **cPanel → Domains**, find the domain, click the pencil / **Manage** beside
-its document root, and change it to `/home/CPUSER/cricauction/public`.
+its document root, and change it to `/home/deamco/cricauction/public`.
 
 ### If your host won't let you change the document root
 
@@ -201,7 +207,7 @@ is a public URL. Use a subdomain if you possibly can.
 
 ## Step 5 — Create `.env`
 
-**File Manager → `/home/CPUSER/cricauction`**, copy `.env.example` to `.env`
+**File Manager → `/home/deamco/cricauction`**, copy `.env.example` to `.env`
 (File Manager hides dotfiles until you tick *Show Hidden Files* under
 Settings), then edit:
 
@@ -214,9 +220,9 @@ APP_TIMEZONE=Asia/Kolkata
 
 DB_HOST=localhost
 DB_PORT=3306
-DB_NAME=cpuser_cricauction
-DB_USER=cpuser_cricapp
-DB_PASS=the-password-from-step-1
+DB_NAME=deamco_APL
+DB_USER=deamco_dpk
+DB_PASS=your-database-password
 DB_CHARSET=utf8mb4
 ```
 
@@ -230,6 +236,37 @@ Three of these matter more than they look:
 - **`APP_ENV=production`** — turns off error display (stack traces would
   otherwise show your file paths to visitors) and switches session cookies to
   `Secure`, which requires HTTPS. See Step 6.
+
+---
+
+### Changing the host, username or password later
+
+**`.env` is the only file you ever edit.** There is no host, username or
+password anywhere in the PHP source — `config/db.php` reads all of them from
+this one file at runtime.
+
+| If this changes | Edit | Then |
+|-----------------|------|------|
+| Database password | `DB_PASS` in `.env` | Nothing else — takes effect on the next request |
+| Database user | `DB_USER` (and `DB_PASS`) | Re-attach the user to the database in cPanel → MySQL® Databases → **Add User To Database** |
+| Database name | `DB_NAME` | Import the schema into the new database first |
+| MySQL host | `DB_HOST` | Only if your host moves you to a remote MySQL server; add your IP under **Remote MySQL** if so |
+| Site URL / domain | `APP_URL` | Update the document root too if the domain changed (Step 4) |
+
+Three things worth knowing:
+
+- **No restart, no cache to clear.** PHP reads `.env` on every request, so a
+  saved change is live immediately.
+- **`.env` is git-ignored and `.cpanel.yml` never copies it**, so pulling a new
+  version of the code will not overwrite your credentials.
+- **Never put the real password in `.env.example`.** That file *is* committed —
+  anything written there is published to GitHub and stays in the git history
+  even after you delete it. If a password ever lands in a commit, rotate it in
+  cPanel; deleting the line is not enough.
+
+If a credential change breaks the site, the symptom tells you which one:
+`SQLSTATE[HY000] [1045]` is a wrong user or password, `[1049]` is a wrong
+database name, and `[2002]` is a wrong host.
 
 ---
 
@@ -276,15 +313,25 @@ Visit `https://auction.yourdomain.com`. You should get the auction dashboard.
 | Check | Expected |
 |-------|----------|
 | Dashboard loads | Player under the hammer, purse board, bid feed |
-| Badge top-right | **MySQL** (not "Demo data") — proves the DB is connected |
+| Badge top-right | **MySQL** — proves the database is connected |
 | `/login.php` | Sign-in form |
 | Sign in as admin | Lands back on the dashboard, name shown top-right |
 | `/score.php` as the scorer | Badge reads **Saving**, not "Demo" |
 | `/.env` in the browser | **403 or 404** — never the file contents |
 
-A **"Demo data"** badge with everything otherwise working means PHP could not
-reach MySQL and fell back to the bundled fixtures. Check `DB_*` in `.env` and
-look at `storage/logs/php-error.log`.
+**If the database is unreachable, what you see depends on `APP_ENV`:**
+
+- **`production`** — a bare **`Service temporarily unavailable.`** page with
+  HTTP **503**. This is deliberate: a production site must not silently serve
+  fabricated demo data as if it were real. The actual reason (wrong password,
+  wrong database name) is written to `storage/logs/php-error.log` and never
+  shown to the visitor.
+- **`local`** — the page still renders with a **"Demo data"** badge, using the
+  bundled fixtures.
+
+So on a live cPanel deployment, **a 503 almost always means the `DB_*` values
+in `.env` are wrong.** Open `storage/logs/php-error.log` — the `SQLSTATE`
+code on the last line tells you which one.
 
 Seeded logins (only if you imported `seed.sql`) — all with password
 `Passw0rd!`:
@@ -338,9 +385,11 @@ Seeded logins (only if you imported `seed.sql`) — all with password
 |---------|-------|-----|
 | Blank white page | PHP < 8.1, or a fatal error with display off | MultiPHP Manager → 8.2; read `storage/logs/php-error.log` |
 | **500 Internal Server Error** | Usually permissions, or an `.htaccess` directive the host disallows | Files 644 / dirs 755; check cPanel → Metrics → **Errors** |
-| Badge says "Demo data" | PHP cannot reach MySQL | `DB_HOST=localhost`, verify the **prefixed** DB name and that the user is attached to the database |
+| **503 "Service temporarily unavailable."** | The database is unreachable — the usual first-deploy failure | Check `DB_*` in `.env`, then read the `SQLSTATE` code in `storage/logs/php-error.log` |
+| Badge says "Demo data" | Same cause, but `APP_ENV=local` so it fell back to fixtures | Fix `DB_*`; set `APP_ENV=production` for a live site |
 | `SQLSTATE[HY000] [1045]` | Wrong DB user or password | Reset it in MySQL® Databases; re-add the user to the database |
-| `SQLSTATE[HY000] [1049]` | Wrong database name | It must include the `cpuser_` prefix |
+| `SQLSTATE[HY000] [1049]` | Wrong database name | Must be the full `deamco_APL`, prefix included and case-exact |
+| `SQLSTATE[HY000] [2002]` | Wrong host | Use `DB_HOST=localhost`, not `127.0.0.1` |
 | Login loops back to the form | `Secure` cookie without HTTPS | Finish Step 6 |
 | Login works, then 404 | `APP_URL` wrong | Match it to the real URL, no trailing slash |
 | Import: *"Access denied … CREATE DATABASE"* | Didn't strip the header | Step 2 |
