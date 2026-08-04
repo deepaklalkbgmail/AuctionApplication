@@ -46,6 +46,7 @@ DROP TABLE IF EXISTS `matches`;
 DROP TABLE IF EXISTS `auction_bids`;
 DROP TABLE IF EXISTS `auction_lots`;
 DROP TABLE IF EXISTS `players`;
+DROP TABLE IF EXISTS `tournament_registrations`;
 DROP TABLE IF EXISTS `users`;
 DROP TABLE IF EXISTS `teams`;
 DROP TABLE IF EXISTS `tournaments`;
@@ -61,6 +62,20 @@ CREATE TABLE `tournaments` (
     `name`               VARCHAR(120)    NOT NULL,
     `season_year`        SMALLINT UNSIGNED NOT NULL,
     `logo_url`           VARCHAR(255)        NULL,
+
+    -- The code players join with. Generated from an alphabet that excludes
+    -- 0/O/o and 1/I/l/i, so it survives being read out in a crowded room.
+    `secret_code`        VARCHAR(16)         NULL,
+
+    -- The season's four dates. Nullable so a tournament can be sketched out
+    -- before the calendar is settled.
+    `start_date`         DATE                NULL,
+    `auction_date`       DATE                NULL,   -- entries close at end of day
+    `end_date`           DATE                NULL,
+    -- The last day an owner may rename their own team. After it, only an
+    -- administrator can.
+    `team_name_change_deadline` DATE          NULL,
+    `registration_open`  TINYINT(1)      NOT NULL DEFAULT 1,
 
     -- Auction rules
     `purse_per_team`     DECIMAL(14,2)   NOT NULL DEFAULT 10000000.00,
@@ -80,6 +95,7 @@ CREATE TABLE `tournaments` (
 
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_tournament_name_season` (`name`, `season_year`),
+    UNIQUE KEY `uq_tournament_secret` (`secret_code`),
     KEY `idx_tournament_status` (`status`),
 
     CONSTRAINT `chk_tournament_squad`   CHECK (`max_squad_size` >= `min_squad_size`),
@@ -127,17 +143,34 @@ CREATE TABLE `teams` (
 
 
 -- ---------------------------------------------------------------------
--- users — the four roles. A team_owner is linked to exactly one team;
--- admins / scorers / viewers have team_id NULL.
--- Passwords are bcrypt hashes from password_hash() — never plaintext.
+-- users — a person, not just a login. Five roles: a team_owner is linked
+-- to exactly one team; admins / scorers / viewers / players have team_id
+-- NULL. Passwords are bcrypt hashes from password_hash(), never plaintext.
+--
+-- A 'player' is someone who registered themselves and wants to be
+-- auctioned. They arrive as 'pending' and reach no auction until an
+-- administrator approves them.
+--
+-- name and email are set once, at registration, and only an administrator
+-- may change them afterwards — they are what the administrator approved.
 -- ---------------------------------------------------------------------
 CREATE TABLE `users` (
     `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `username`       VARCHAR(40)      NULL,            -- sign in with this or the email
     `name`           VARCHAR(120) NOT NULL,
     `email`          VARCHAR(190) NOT NULL,            -- 190 keeps the index under utf8mb4 limits
     `phone`          VARCHAR(20)      NULL,
+    `address`        VARCHAR(255)     NULL,
+    `photo_path`     VARCHAR(255)     NULL,            -- relative to public/
+    `player_type`    ENUM('batsman','bowler','all_rounder','wicket_keeper') NULL,
     `password_hash`  VARCHAR(255) NOT NULL,
-    `role`           ENUM('admin','team_owner','scorer','viewer') NOT NULL DEFAULT 'viewer',
+    -- Set when an administrator issues or resets a password; cleared as
+    -- soon as the person chooses their own.
+    `must_change_password` TINYINT(1) NOT NULL DEFAULT 0,
+    `role`           ENUM('admin','team_owner','scorer','viewer','player') NOT NULL DEFAULT 'viewer',
+    `status`         ENUM('pending','approved','rejected','suspended') NOT NULL DEFAULT 'approved',
+    `approved_by`    INT UNSIGNED     NULL,
+    `approved_at`    DATETIME         NULL,
     `team_id`        INT UNSIGNED     NULL,            -- required for team_owner, NULL otherwise
     `avatar_url`     VARCHAR(255)     NULL,
     `is_active`      TINYINT(1)   NOT NULL DEFAULT 1,
@@ -147,17 +180,58 @@ CREATE TABLE `users` (
 
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_users_email` (`email`),
+    UNIQUE KEY `uq_users_username` (`username`),
+    -- One owner per team. team_id is NULL for everyone who is not an owner,
+    -- and a unique index permits any number of NULLs — so this says exactly
+    -- "no two owners may hold the same team", and nothing more.
+    UNIQUE KEY `uq_users_owner_team` (`team_id`),
     KEY `idx_users_role` (`role`, `is_active`),
-    KEY `idx_users_team` (`team_id`),
+    KEY `idx_users_status` (`status`, `role`),
 
     CONSTRAINT `fk_users_team`
         FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
+    CONSTRAINT `fk_users_approved_by`
+        FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
 
     -- A team owner must have a team; nobody else may have one.
     CONSTRAINT `chk_users_team_role` CHECK (
         (`role` = 'team_owner' AND `team_id` IS NOT NULL)
         OR (`role` <> 'team_owner' AND `team_id` IS NULL)
     )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+-- ---------------------------------------------------------------------
+-- tournament_registrations — the application, and the decision on it.
+--
+-- A player applies with the tournament's secret code; an administrator
+-- approves or rejects. Approval is what creates the players row and the
+-- auction lot, so this table is the audit trail for who let each player
+-- into the auction, and when.
+-- ---------------------------------------------------------------------
+CREATE TABLE `tournament_registrations` (
+    `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `tournament_id` INT UNSIGNED NOT NULL,
+    `user_id`       INT UNSIGNED NOT NULL,
+    `status`        ENUM('pending','approved','rejected','withdrawn') NOT NULL DEFAULT 'pending',
+    `applied_at`    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `decided_by`    INT UNSIGNED     NULL,
+    `decided_at`    DATETIME         NULL,
+    `note`          VARCHAR(255)     NULL,
+
+    PRIMARY KEY (`id`),
+    -- One application per person per tournament. Re-applying reuses the row.
+    UNIQUE KEY `uq_registration` (`tournament_id`, `user_id`),
+    KEY `idx_registration_queue` (`tournament_id`, `status`),
+
+    CONSTRAINT `fk_reg_tournament`
+        FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_reg_user`
+        FOREIGN KEY (`user_id`) REFERENCES `users` (`id`)
+        ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_reg_decided_by`
+        FOREIGN KEY (`decided_by`) REFERENCES `users` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
@@ -169,6 +243,9 @@ CREATE TABLE `users` (
 CREATE TABLE `players` (
     `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `tournament_id`  INT UNSIGNED  NOT NULL,
+    -- The account that registered. Nullable: an administrator can still
+    -- enter a player who has no login of their own.
+    `user_id`        INT UNSIGNED      NULL,
     `full_name`      VARCHAR(120)  NOT NULL,
     `display_name`   VARCHAR(60)       NULL,           -- short name for the scorecard
     `photo_url`      VARCHAR(255)      NULL,
@@ -208,10 +285,14 @@ CREATE TABLE `players` (
     KEY `idx_players_team`   (`team_id`),
     KEY `idx_players_set`    (`tournament_id`, `auction_set`),
     UNIQUE KEY `uq_player_jersey` (`team_id`, `jersey_number`),
+    -- One account appears at most once per tournament.
+    UNIQUE KEY `uq_player_user_tournament` (`tournament_id`, `user_id`),
 
     CONSTRAINT `fk_players_tournament`
         FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
         ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT `fk_players_user`
+        FOREIGN KEY (`user_id`) REFERENCES `users` (`id`),
     CONSTRAINT `fk_players_team`
         FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
 

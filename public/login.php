@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 /**
- * Sign-in. Kept minimal on purpose — it exists so the auction API has a
- * session to authorise against; the styled auth flow lands with the router.
+ * Sign-in. Takes a username or an email address, whichever the person was
+ * given.
  *
- * Failure is always reported as one generic message: telling an attacker
- * "no such account" versus "wrong password" hands them a user enumerator.
+ * A wrong username and a wrong password produce the same message: telling
+ * an attacker "no such account" versus "wrong password" hands them a user
+ * enumerator. An account that is merely unapproved or suspended is named as
+ * such — but only once the correct password has been supplied, so nothing
+ * is disclosed to anyone who could not already sign in.
  */
 
 require_once dirname(__DIR__) . '/config/config.php';
@@ -15,8 +18,19 @@ require_once dirname(__DIR__) . '/config/config.php';
 use App\Core\Auth;
 use App\Core\Security;
 
+/** The screen each role signs in to use. */
+function home_for(string $role): string
+{
+    return match ($role) {
+        Auth::ROLE_SCORER => 'score.php',
+        Auth::ROLE_ADMIN  => 'admin/index.php',
+        Auth::ROLE_PLAYER => 'profile.php',
+        default           => 'auction.php',
+    };
+}
+
 if (Auth::check()) {
-    header('Location: ' . (Auth::role() === Auth::ROLE_SCORER ? 'score.php' : 'auction.php'));
+    header('Location: ' . (Auth::mustChangePassword() ? 'password.php?forced=1' : home_for(Auth::role())));
     exit;
 }
 
@@ -26,17 +40,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!Security::verifyCsrf($_POST['csrf_token'] ?? null)) {
         $error = 'Your session expired. Please try again.';
     } else {
-        $email    = trim((string) ($_POST['email'] ?? ''));
-        $password = (string) ($_POST['password'] ?? '');
+        $identifier = trim((string) ($_POST['identifier'] ?? $_POST['email'] ?? ''));
+        $password   = (string) ($_POST['password'] ?? '');
 
-        if (Auth::attempt(Database::pdo(), $email, $password)) {
+        if (Auth::attempt(Database::pdo(), $identifier, $password)) {
             // Straight to the screen this person signed in to use — a scorer
             // at the ground should not have to pass through a hub page.
-            header('Location: ' . (Auth::role() === Auth::ROLE_SCORER ? 'score.php' : 'auction.php'));
+            header('Location: ' . (Auth::mustChangePassword() ? 'password.php?forced=1' : home_for(Auth::role())));
             exit;
         }
 
-        $error = 'Those credentials do not match our records.';
+        $error = Auth::failureMessage();
     }
 }
 
@@ -78,11 +92,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             <?php endif; ?>
 
             <div>
-                <label for="email" class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Email</label>
-                <input id="email" name="email" type="email" required autofocus autocomplete="username"
-                       value="<?= e((string) ($_POST['email'] ?? '')) ?>"
+                <label for="identifier" class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">Username or email</label>
+                <input id="identifier" name="identifier" type="text" required autofocus autocomplete="username"
+                       value="<?= e((string) ($_POST['identifier'] ?? '')) ?>"
                        class="w-full rounded-xl border border-white/10 bg-slate-950/60 px-3.5 py-3 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20"
-                       placeholder="you@club.test">
+                       placeholder="rahul.s  or  you@club.test">
             </div>
 
             <div>
@@ -99,6 +113,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         </form>
 
         <p class="mt-5 text-center text-[12px] text-slate-500">
+            New player? <a href="register.php" class="font-semibold text-emerald-400 hover:underline">Create an account</a>
+        </p>
+        <p class="mt-2 text-center text-[12px] text-slate-500">
             Watching only? <a href="auction.php?role=viewer" class="font-semibold text-emerald-400 hover:underline">Open the live board</a>
         </p>
     </main>
