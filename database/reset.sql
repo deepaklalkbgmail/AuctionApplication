@@ -19,22 +19,44 @@
 --
 --  On shared hosting run deploy/strip-create-database.sh first, or delete
 --  any USE statement, and import into your prefixed database.
--- =====================================================================
+--
+--  ---------------------------------------------------------------------
+--  Why DELETE and not TRUNCATE
+--
+--  TRUNCATE is refused on any table another table points at with a
+--  foreign key — MySQL error 1701 — and phpMyAdmin re-asserts
+--  FOREIGN_KEY_CHECKS = 1 during an import, so switching the flag off in
+--  this file would not survive. DELETE has no such restriction, and
+--  running child tables before their parents means no foreign key is ever
+--  left dangling. It works with the checks left on, which is what
+--  phpMyAdmin gives you.
+--  ---------------------------------------------------------------------
 
-SET FOREIGN_KEY_CHECKS = 0;
+-- Children first ------------------------------------------------------
+DELETE FROM `ball_by_ball`;
+DELETE FROM `innings`;
+DELETE FROM `match_squads`;
+DELETE FROM `matches`;
+DELETE FROM `auction_bids`;
+DELETE FROM `auction_lots`;
 
-TRUNCATE TABLE `ball_by_ball`;
-TRUNCATE TABLE `innings`;
-TRUNCATE TABLE `match_squads`;
-TRUNCATE TABLE `matches`;
-TRUNCATE TABLE `auction_bids`;
-TRUNCATE TABLE `auction_lots`;
-TRUNCATE TABLE `players`;
-TRUNCATE TABLE `users`;
-TRUNCATE TABLE `teams`;
-TRUNCATE TABLE `tournaments`;
+-- users and players both point at teams, so they go before teams -------
+DELETE FROM `users`;
+DELETE FROM `players`;
+DELETE FROM `teams`;
+DELETE FROM `tournaments`;
 
-SET FOREIGN_KEY_CHECKS = 1;
+-- Start the next season's ids at 1 rather than continuing the old count.
+ALTER TABLE `ball_by_ball`  AUTO_INCREMENT = 1;
+ALTER TABLE `innings`       AUTO_INCREMENT = 1;
+ALTER TABLE `match_squads`  AUTO_INCREMENT = 1;
+ALTER TABLE `matches`       AUTO_INCREMENT = 1;
+ALTER TABLE `auction_bids`  AUTO_INCREMENT = 1;
+ALTER TABLE `auction_lots`  AUTO_INCREMENT = 1;
+ALTER TABLE `users`         AUTO_INCREMENT = 1;
+ALTER TABLE `players`       AUTO_INCREMENT = 1;
+ALTER TABLE `teams`         AUTO_INCREMENT = 1;
+ALTER TABLE `tournaments`   AUTO_INCREMENT = 1;
 
 -- ---------------------------------------------------------------------
 --  One administrator, so you can sign in.

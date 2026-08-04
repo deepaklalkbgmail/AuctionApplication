@@ -421,9 +421,12 @@ so you can still sign in.
 
 **Take a backup first** — phpMyAdmin → Export → Go. This cannot be undone.
 
-Afterwards the landing page shows no auction and no match, which is correct
-for an empty application. Follow [section 4.1](#41-before-the-auction-loading-the-tournament)
-to load your own tournament.
+Afterwards every screen says so plainly — the landing page drops its live
+strip, the auction board reads **"No auction is running"** and the scoring
+pad reads **"No match is being scored"**. That is correct for an empty
+application, not a fault. Follow
+[section 4.1](#41-before-the-auction-loading-the-tournament) to load your own
+tournament.
 
 ### 8.2 A dataset for demonstrating
 
@@ -565,6 +568,8 @@ anyone who is locked out.
 | **503 Service temporarily unavailable** | The database is unreachable | Check `DB_*` in `.env`, then `storage/logs/php-error.log` |
 | Scorer badge says **Demo** | Not signed in as scorer/admin, or no live match | Sign in; confirm a match with `status = 'live'` and an open innings |
 | Landing page shows an old tournament | Previous data still loaded | Run `reset.sql` |
+| **"No auction is running" / "No match is being scored"** | The database is empty, or no lot is live and no innings is open | Expected on a clean install. Load a tournament (4.1) and open a lot (4.2), or a fixture (4.3) |
+| `#1701 Cannot truncate a table referenced in a foreign key constraint` | An old copy of `reset.sql` that used TRUNCATE | Use the current `reset.sql`; it uses DELETE and works with foreign key checks on |
 | Bid button greyed out | Leading, purse-blocked, or squad full | Hover for the reason; see 5.3 |
 | Auction board not updating | Lost connection | It refreshes every 3 seconds; reload the page |
 | "Not Found" on a page | That file was not uploaded | Re-upload `public/` |

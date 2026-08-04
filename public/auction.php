@@ -112,7 +112,22 @@ if (Database::isAvailable()) {
     }
 }
 
+// A clean installation has no auction yet. Show that honestly rather than
+// falling back to the bundled fixtures — invented players on a production
+// site look exactly like a bug, and cannot be told apart from one. The
+// fallback stays for local development, where it is useful for UI work.
 if ($state === null) {
+    if (IS_PRODUCTION) {
+        $emptyTitle = 'No auction is running';
+        $emptyBody  = 'When the tournament director puts the first player under the hammer, the live board appears here.';
+        $emptyHint  = Auth::is(Auth::ROLE_ADMIN)
+            ? 'As administrator: load a tournament, teams, players and their auction lots, then open the first lot. Section 4 of the User Guide has the steps.'
+            : null;
+
+        require dirname(__DIR__) . '/app/Views/partials/empty_state.php';
+        exit;
+    }
+
     $state = require dirname(__DIR__) . '/database/demo_state.php';
 }
 

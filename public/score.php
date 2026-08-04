@@ -58,10 +58,14 @@ $INNINGS_ID = filter_input(INPUT_GET, 'innings', FILTER_VALIDATE_INT) ?: 1;
 $live    = false;
 $initial = null;
 
-if (Auth::check() && Auth::is(Auth::ROLE_SCORER, Auth::ROLE_ADMIN) && Database::isAvailable()) {
+$canScore = Auth::check() && Auth::is(Auth::ROLE_SCORER, Auth::ROLE_ADMIN);
+
+if (Database::isAvailable()) {
     try {
+        // Read the card for anyone — a viewer follows the same match, they
+        // simply cannot save. Only a scorer or admin gets a writable pad.
         $initial = (new ScoringService())->scorecard($INNINGS_ID);
-        $live    = true;
+        $live    = $canScore;
 
         $match['overs_per_innings'] = $initial['innings']['overs_limit'];
         $match['balls_per_over']    = $initial['innings']['balls_per_over'];
@@ -71,8 +75,20 @@ if (Auth::check() && Auth::is(Auth::ROLE_SCORER, Auth::ROLE_ADMIN) && Database::
                                        'short_name' => $initial['innings']['bowling_short']];
         $innings['target']          = $initial['innings']['target'];
     } catch (Throwable $e) {
-        error_log('[scorer] falling back to the demo match: ' . $e->getMessage());
+        error_log('[scorer] no live innings: ' . $e->getMessage());
     }
+}
+
+// Same rule as the auction board: no invented match on a production site.
+if ($initial === null && IS_PRODUCTION) {
+    $emptyTitle = 'No match is being scored';
+    $emptyBody  = 'When a fixture goes live and its first innings is opened, the scoring pad and the live scorecard appear here.';
+    $emptyHint  = Auth::is(Auth::ROLE_ADMIN, Auth::ROLE_SCORER)
+        ? 'A match needs status "live", both playing elevens recorded, and an open innings. Section 4.3 of the User Guide has the steps.'
+        : null;
+
+    require dirname(__DIR__) . '/app/Views/partials/empty_state.php';
+    exit;
 }
 
 $bootstrap = Security::json([
