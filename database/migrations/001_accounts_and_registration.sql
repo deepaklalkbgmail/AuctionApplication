@@ -139,11 +139,33 @@ CREATE TABLE IF NOT EXISTS `tournament_registrations` (
 --  Accounts that already existed were created by an administrator, so they
 --  are approved. Give each one a username derived from its email so it can
 --  still sign in either way.
+--
+--  Nobody's password changes, and nobody is forced to change one — an
+--  existing installation must not lock its own staff out on upgrade day.
 -- ---------------------------------------------------------------------
 UPDATE `users`
    SET `status` = 'approved'
  WHERE `status` IS NULL OR `status` = '';
 
+-- Step 1: the straightforward ones. Only an email whose local part is
+-- unique across the table becomes a username directly. Two accounts on
+-- admin@one.com and admin@two.com would both want "admin", and the unique
+-- index would reject the second — so they are left for step 2 rather than
+-- failing the migration half way through.
+UPDATE `users` u
+  JOIN (
+        SELECT LEFT(SUBSTRING_INDEX(`email`, '@', 1), 40) AS handle
+          FROM `users`
+         GROUP BY handle
+        HAVING COUNT(*) = 1
+       ) unique_handles
+    ON unique_handles.handle = LEFT(SUBSTRING_INDEX(u.`email`, '@', 1), 40)
+   SET u.`username` = unique_handles.handle
+ WHERE u.`username` IS NULL;
+
+-- Step 2: whatever is left, disambiguated by the account's own id, which
+-- is unique by definition. The result is ugly but it works, and an
+-- administrator can tidy it under Administration -> People afterwards.
 UPDATE `users`
-   SET `username` = SUBSTRING_INDEX(`email`, '@', 1)
+   SET `username` = CONCAT(LEFT(SUBSTRING_INDEX(`email`, '@', 1), 30), '.', `id`)
  WHERE `username` IS NULL;
