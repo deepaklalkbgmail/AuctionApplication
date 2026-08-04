@@ -5,7 +5,7 @@ for cricket tournaments.
 
 **Stack:** PHP 8.1+ (OOP, PDO) · MySQL 8.0.16+ / MariaDB 10.2.1+ · Tailwind CSS (prebuilt) · Alpine.js (vendored) — no external CDN, no build step on the server
 
-**Using the application?** → **[USER-GUIDE.md](USER-GUIDE.md)** — all four roles,
+**Using the application?** → **[USER-GUIDE.md](USER-GUIDE.md)** — all five roles,
 a clean-install procedure and a demonstration script.
 
 **Deploying to shared hosting?** → **[DEPLOY-CPANEL.md](DEPLOY-CPANEL.md)**
@@ -33,6 +33,20 @@ a clean-install procedure and a demonstration script.
 | Typed rejections | [`app/Exceptions/AuctionException.php`](app/Exceptions/AuctionException.php) |
 | Sign-in | [`public/login.php`](public/login.php) |
 | Integration tests (48 assertions) | [`tests/auction_test.php`](tests/auction_test.php) |
+
+**Phase 4 — accounts, approvals and the tournament cycle**
+
+| Deliverable | Location |
+|-------------|----------|
+| Registration, approval, profiles, staff accounts, passwords | [`app/Services/AccountService.php`](app/Services/AccountService.php) |
+| Tournaments, secret codes, applications, teams and owners | [`app/Services/TournamentService.php`](app/Services/TournamentService.php) |
+| Typed rejections | [`app/Exceptions/AccountException.php`](app/Exceptions/AccountException.php) |
+| Player registration (with the permanence warning) | [`public/register.php`](public/register.php) |
+| My details / password / join a tournament / my team | [`public/profile.php`](public/profile.php), [`public/password.php`](public/password.php), [`public/apply.php`](public/apply.php), [`public/team.php`](public/team.php) |
+| Administration — people, tournaments, applications, teams | [`public/admin/`](public/admin/) |
+| Shared page shell for the account screens | [`app/Views/layouts/shell.php`](app/Views/layouts/shell.php) |
+| Migration for an existing installation | [`database/migrations/001_accounts_and_registration.sql`](database/migrations/001_accounts_and_registration.sql) |
+| Integration tests (140 assertions) | [`tests/account_test.php`](tests/account_test.php) |
 
 **Phase 3 — the scorer's interface**
 
@@ -322,8 +336,13 @@ document-root setup.
 ## Roadmap
 
 - ~~**Phase 2** — auction write path inside a `SELECT … FOR UPDATE` transaction~~ ✅
-- **Phase 2b** — router, admin CRUD for players & teams, auction-set management.
 - ~~**Phase 3** — scorer pad UI, `ball_by_ball` ingestion, live scorecard~~ ✅
+- ~~**Phase 4** — self-registration, approvals, tournaments and their secret
+  codes, teams and owners; the screens for all of it~~ ✅
+- **Phase 4b** — admin CRUD for the player pool itself (base prices, auction
+  sets, re-listing unsold players) and a CSV import, so an existing pool does
+  not have to register one at a time.
 - **Phase 3b** — innings break, second-innings target and result calculation;
   a read-only viewer scorecard on `action=scorecard`.
-- **Phase 4** — Replace the 3-second poll with SSE; CSV player import; PDF scorecards.
+- **Phase 5** — Replace the 3-second poll with SSE; PDF scorecards; email for
+  approvals and password resets.

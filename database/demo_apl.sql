@@ -12,8 +12,8 @@
 --  This is demonstration data. Run reset.sql again before real use.
 -- =====================================================================
 
-INSERT INTO `tournaments` (`id`,`name`,`season_year`,`purse_per_team`,`min_squad_size`,`max_squad_size`,`max_overseas`,`bid_increment`,`bid_timer_seconds`,`overs_per_innings`,`balls_per_over`,`status`) VALUES
-  (1, 'APL', 2026, 50000000.00, 11, 15, 4, 500000.00, 30, 20, 6, 'auction');
+INSERT INTO `tournaments` (`id`,`name`,`season_year`,`secret_code`,`auction_date`,`start_date`,`end_date`,`team_name_change_deadline`,`registration_open`,`purse_per_team`,`min_squad_size`,`max_squad_size`,`max_overseas`,`bid_increment`,`bid_timer_seconds`,`overs_per_innings`,`balls_per_over`,`status`) VALUES
+  (1, 'APL', 2026, 'BATSMAN7', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 1, 50000000.00, 11, 15, 4, 500000.00, 30, 20, 6, 'auction');
 
 INSERT INTO `teams` (`id`,`tournament_id`,`name`,`short_name`,`primary_color`,`home_venue`,`purse_total`,`purse_spent`,`players_bought`,`overseas_bought`) VALUES
   (1, 1, 'Coastal Titans', 'CT', '#22c55e', 'Marine Drive Ground', 50000000.00, 33000000.00, 11, 0),
@@ -23,16 +23,16 @@ INSERT INTO `teams` (`id`,`tournament_id`,`name`,`short_name`,`primary_color`,`h
   (5, 1, 'Harbour Warriors', 'HW', '#f43f5e', 'Dockside Ground', 50000000.00, 4400000.00, 3, 0),
   (6, 1, 'Summit Lions', 'SL', '#14b8a6', 'Ridge Stadium', 50000000.00, 5700000.00, 3, 0);
 
-INSERT INTO `users` (`name`,`email`,`password_hash`,`role`,`team_id`) VALUES
-  ('Tournament Director', 'admin@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'admin', NULL),
-  ('Match Scorer', 'scorer@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'scorer', NULL),
-  ('Guest Viewer', 'viewer@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'viewer', NULL),
-  ('Coastal Titans Owner', 'ct@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 1),
-  ('Metro Royals Owner', 'mr@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 2),
-  ('Highland Chargers Owner', 'hc@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 3),
-  ('Desert Falcons Owner', 'df@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 4),
-  ('Harbour Warriors Owner', 'hw@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 5),
-  ('Summit Lions Owner', 'sl@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 6);
+INSERT INTO `users` (`username`,`name`,`email`,`password_hash`,`role`,`status`,`team_id`) VALUES
+  ('apl.admin', 'Tournament Director', 'admin@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'admin', 'approved', NULL),
+  ('apl.scorer', 'Match Scorer', 'scorer@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'scorer', 'approved', NULL),
+  ('apl.viewer', 'Guest Viewer', 'viewer@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'viewer', 'approved', NULL),
+  ('apl.ct', 'Coastal Titans Owner', 'ct@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 'approved', 1),
+  ('apl.mr', 'Metro Royals Owner', 'mr@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 'approved', 2),
+  ('apl.hc', 'Highland Chargers Owner', 'hc@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 'approved', 3),
+  ('apl.df', 'Desert Falcons Owner', 'df@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 'approved', 4),
+  ('apl.hw', 'Harbour Warriors Owner', 'hw@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 'approved', 5),
+  ('apl.sl', 'Summit Lions Owner', 'sl@apl.local', '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK', 'team_owner', 'approved', 6);
 
 INSERT INTO `players` (`id`,`tournament_id`,`full_name`,`display_name`,`country`,`role`,`batting_style`,`bowling_style`,`is_overseas`,`is_capped`,`auction_set`,`base_price`,`career_matches`,`career_runs`,`career_wickets`,`strike_rate`,`economy`,`status`,`team_id`,`sold_price`) VALUES
   (1,1,'Aditya Bhat','A Bhat','India','bowler','left_hand','right_arm_medium',0,1,'Marquee',2000000.00,23,13,20,106.70,7.10,'sold',1,3500000.00),

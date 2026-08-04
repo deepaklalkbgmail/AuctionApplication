@@ -111,9 +111,20 @@ and import **in this order**:
 
 Order matters: the foreign keys depend on it.
 
-Confirm afterwards — the sidebar should show **13 objects** (10 tables +
+Confirm afterwards — the sidebar should show **14 objects** (11 tables +
 3 views). If `users` is missing, your MySQL rejected a constraint; check the
 version in Step 0.
+
+### Already have the application running?
+
+If your database was created before registrations and tournaments existed,
+do **not** re-import `schema.sql` — it drops every table. Import
+`database/migrations/001_accounts_and_registration.sql` instead. It is
+additive: it adds the new columns and the `tournament_registrations` table,
+gives every existing account a username derived from its email address, and
+deletes nothing. A season already in progress survives it.
+
+Back the database up first — phpMyAdmin → Export → Go — as with any change.
 
 > **Production:** skip files 2 and 3. They create demo accounts with the
 > published password `Passw0rd!`. If you do import them to try things out,
@@ -364,6 +375,7 @@ cd ~/cricauction
 find . -type d -exec chmod 755 {} \;
 find . -type f -exec chmod 644 {} \;
 chmod 755 storage storage/logs
+chmod 755 public/assets/img/uploads    # players' photos are written here
 chmod 600 .env                 # owner-only; nothing else needs to read it
 ```
 
@@ -371,7 +383,10 @@ chmod 600 .env                 # owner-only; nothing else needs to read it
 accounts on the same server, and many hosts refuse to execute PHP in a
 world-writable directory anyway.
 
-`storage/logs/` must be writable or PHP cannot write its error log.
+`storage/logs/` must be writable or PHP cannot write its error log, and
+`public/assets/img/uploads/` must be writable or a player cannot upload a
+photo. That folder ships with its own `.htaccess` that strips the PHP handler
+and serves image extensions only — make sure it uploaded with the rest.
 
 ---
 
@@ -481,8 +496,10 @@ every failure above.
 **Manually:** upload the changed files. Never overwrite `.env`.
 
 If a release changes the schema, back up the database first, then apply the
-migration. There is no migration runner yet — schema changes are hand-applied
-SQL for now.
+migration from `database/migrations/` in numerical order. There is no
+migration runner yet — they are hand-applied through phpMyAdmin. Each one is
+additive and safe to run on a database that already holds a season; none of
+them drops anything.
 
 ---
 

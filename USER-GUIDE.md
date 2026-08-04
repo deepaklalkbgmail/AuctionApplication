@@ -3,7 +3,7 @@
 Everything needed to run a tournament, train the people using it, and
 demonstrate the application.
 
-**Read first:** [What the application does not do yet](#12-what-the-application-does-not-do-yet).
+**Read first:** [What the application does not do yet](#14-what-the-application-does-not-do-yet).
 Two of those limits change how you plan a session, so it is better to know
 them before the auction than during it.
 
@@ -12,25 +12,37 @@ them before the auction than during it.
 ## Contents
 
 1. [What this application is](#1-what-this-application-is)
-2. [The four roles](#2-the-four-roles)
-3. [Signing in](#3-signing-in)
-4. [Administrator](#4-administrator)
-5. [Team Owner](#5-team-owner)
-6. [Scorer](#6-scorer)
-7. [Viewer](#7-viewer)
-8. [Preparing a clean application](#8-preparing-a-clean-application)
-9. [Demonstration script](#9-demonstration-script)
-10. [Changing a password](#10-changing-a-password)
-11. [Troubleshooting](#11-troubleshooting)
-12. [What the application does not do yet](#12-what-the-application-does-not-do-yet)
-13. [Glossary](#13-glossary)
+2. [The five roles](#2-the-five-roles)
+3. [How a season runs, start to finish](#3-how-a-season-runs-start-to-finish)
+4. [Signing in](#4-signing-in)
+5. [Player](#5-player)
+6. [Administrator](#6-administrator)
+7. [Team Owner](#7-team-owner)
+8. [Scorer](#8-scorer)
+9. [Viewer](#9-viewer)
+10. [Preparing a clean application](#10-preparing-a-clean-application)
+11. [Demonstration script](#11-demonstration-script)
+12. [Passwords](#12-passwords)
+13. [Troubleshooting](#13-troubleshooting)
+14. [What the application does not do yet](#14-what-the-application-does-not-do-yet)
+15. [Glossary](#15-glossary)
 
 ---
 
 ## 1. What this application is
 
-CricAuction runs the two events that bracket a club or corporate cricket
-tournament:
+CricAuction runs a club or corporate cricket tournament from the first
+registration to the last ball.
+
+**The people.** Players register themselves — name, address, mobile, photo,
+what kind of cricketer they are — and an administrator approves them. Nobody
+reaches an auction without that approval, and a player's name and email are
+fixed from the moment they are approved, so what the administrator agreed to
+is what stays on the sheet.
+
+**The tournament.** An administrator creates a season with its four dates and
+a secret code. Players join with the code; approving an application is what
+puts a name into the auction list.
 
 **The auction.** Players go under the hammer one at a time. Team owners bid
 against a countdown, each team has a fixed purse, and the application refuses
@@ -38,7 +50,7 @@ any bid a team cannot afford. When the hammer falls the player joins that
 squad and the money moves — in one step, so a player can never be sold
 without the purse being debited.
 
-**The scoring.** Once teams exist, matches are scored ball by ball on a phone
+**The scoring.** Once squads exist, matches are scored ball by ball on a phone
 at the ground. The scorer records what happened — a four, a wide, a wicket —
 and the application works out the rest: who is on strike, when the over ends,
 which runs count against the bowler. Everyone else watches the scorecard
@@ -48,127 +60,279 @@ Everything runs in a web browser. There is nothing to install.
 
 ---
 
-## 2. The four roles
+## 2. The five roles
 
-| Role | Who | Can do | Needs an account |
-|------|-----|--------|------------------|
-| **Viewer** | Anyone | Watch the auction board and the live scorecard | No |
-| **Team Owner** | One per franchise | Bid for players, see their purse and squad | Yes |
-| **Scorer** | One per match | Record every ball | Yes |
-| **Administrator** | Tournament director | Run the auction — open lots, sell, pass | Yes |
+| Role | Who | Can do | How the account is made |
+|------|-----|--------|--------------------------|
+| **Viewer** | Anyone | Watch the auction board and the live scorecard | No account needed |
+| **Player** | Anyone who wants to be auctioned | Register, join a tournament with its code, keep their details current | Registers themselves; an administrator approves |
+| **Team Owner** | One per franchise | Name their team, bid for players, see their purse and squad | An administrator creates the team and names the owner |
+| **Scorer** | One per match | Record every ball | An administrator creates it and hands over the credentials |
+| **Administrator** | Tournament director | Everything: approvals, tournaments, teams, the hammer | Created with the database, or by another administrator |
 
-A person has exactly one role. An owner is tied to exactly one team and
-cannot bid for another.
+**One team has exactly one owner.** The database enforces it, not just the
+screens — two accounts cannot hold the same team.
+
+**A team owner may also be a player.** It is not required. An owner who wants
+to be auctioned applies to the tournament like anybody else, and is approved
+like anybody else.
 
 ---
 
-## 3. Signing in
+## 3. How a season runs, start to finish
+
+Read this once and the rest of the guide is a reference.
+
+```
+  ADMINISTRATOR                    PLAYER
+  ─────────────                    ──────
+  Creates the tournament   ──▶     (4 dates + a secret code)
+       │
+       │  gives out the code       Registers
+       │                             │  name, address, mobile,
+       │                             │  photo, kind of player, email
+       ▼                             ▼
+  Approves the account     ◀──     waits
+       │                             │
+       │                             ▼
+       │                           Applies with the secret code
+       ▼                             │
+  Approves the application ────────▶ IN THE AUCTION LIST
+       │
+       ▼
+  Creates each team, names its one owner
+       │
+       ▼                           OWNER
+  Runs the auction         ◀──▶    names the team, bids
+       │                             │
+       │                             │  may rename until the deadline
+       ▼                             ▼
+  Sets up matches          ──▶     SCORER records every ball
+```
+
+**Two approvals, and they are different.** The first says *this is a real
+person*. The second says *this person is in this tournament* — and it is the
+one that puts a name into the auction list. Approving an application creates
+the player record and the auction lot in the same instant, so there is no
+third step to forget.
+
+**What a player can and cannot change.**
+
+| Detail | Player | Administrator |
+|--------|--------|---------------|
+| Full name | **No** | Yes |
+| Email address | **No** | Yes |
+| Username | No | Yes (via the database) |
+| Mobile number | Yes | Yes |
+| Address | Yes | Yes |
+| Photo | Yes | Yes |
+| Kind of player | Yes | Yes |
+
+The registration form says so twice before anything is saved, and a third
+time on the confirmation step. The rule is not enforced by a disabled input —
+the method that saves a player's own changes has no name or email parameter
+at all, so re-enabling the field in a browser achieves nothing.
+
+---
+
+## 4. Signing in
 
 1. Go to the application address (for example `https://deam.co.in/APL`).
-2. The landing page explains the application and shows four role cards.
-   Viewers can go straight in; the other three click **Sign in**.
-3. Enter your email and password.
+2. The landing page explains the application and shows five role cards.
+   Viewers can go straight in; players click **Register**; everyone else
+   clicks **Sign in**.
+3. Enter **your username or your email address** — either works — and your
+   password.
 
-You land directly on your own screen — scorers on the scoring pad, everyone
-else on the auction board.
+You land on your own screen: administrators on the administration hub,
+scorers on the scoring pad, owners on their team, players on their details.
+
+**"Your registration is still waiting for an administrator to approve it."**
+Your password was right; the account simply is not approved yet. Nothing to
+do but wait, or ask the organisers.
+
+**"Those credentials do not match our records"** is shown for both an unknown
+username and a wrong password, on purpose — it stops anyone probing for valid
+accounts.
+
+**If you are sent straight to a "Change password" screen**, you are signed in
+with a password an administrator issued. Replace it and you will be let
+through. Nothing else is reachable until you do.
 
 **If sign-in returns you to the login form**, the site is not running over
 HTTPS. Session cookies are marked "secure", so the browser refuses to send
 them over plain HTTP. Tell your administrator.
 
-**"Those credentials do not match our records"** is shown for both a wrong
-email and a wrong password, on purpose — it stops anyone probing for valid
-addresses.
+---
+
+## 5. Player
+
+### 5.1 Registering
+
+From the landing page choose **Register as a player**.
+
+You will be asked for your full name, email address, a username, your mobile
+number, your address, what kind of player you are, and a password. A photo is
+optional and can be added later.
+
+> **Your full name and email address are permanent.** Read them on the
+> confirmation screen before you press **Confirm and register**. After that
+> only an administrator can change them. Everything else is yours to update
+> whenever you like.
+
+A username is 3 to 40 characters — letters, numbers, dot, underscore or
+hyphen, no spaces. A password needs at least 8 characters with a letter and a
+number in it.
+
+When you submit, the screen says **Registration received**. You cannot sign
+in yet: an administrator has to approve the account first.
+
+### 5.2 Joining a tournament
+
+Once approved, sign in and choose **Join a tournament**.
+
+The organisers will give you a **secret code** — eight characters, on a
+WhatsApp message or read out at a meeting. Type it in and press **Apply**.
+
+Codes never contain `0`, `O`, `o`, `1`, `I`, `l` or `i`. Those are the
+characters people mistake for each other, so they are simply not used. If you
+think you see a zero, it is the letter O — and if you think you see the
+letter O, look again, because it is neither.
+
+Case does not matter, and spaces or hyphens are ignored: `kxq7 rbtm` and
+`KXQ7RBTM` are the same code.
+
+Applying does **not** put you in the auction. An administrator reviews the
+application; your name enters the auction list when they approve it. **My
+details** shows where each of your applications stands.
+
+### 5.3 Keeping your details current
+
+**My details** lets you change your mobile number, address, photo and what
+kind of player you are, at any time. Your name, email and username are shown
+but greyed out — ask an administrator if one of them is genuinely wrong.
+
+### 5.4 After the auction
+
+**My details** shows the outcome for each tournament: still in the pool, sold
+to a named team, or unsold. An unsold player can be re-listed by the
+administrator in a later round.
 
 ---
 
-## 4. Administrator
+## 6. Administrator
 
-### 4.1 Before the auction: loading the tournament
+Everything an administrator does now has a screen. Sign in and you land on
+the **administration hub**, which shows the two queues that hold everything
+else up — registrations waiting to be approved, and applications waiting to
+be let into a tournament — and links to the rest.
 
-> **Be aware:** there is no screen for adding tournaments, teams, players or
-> user accounts yet. All setup is done in **cPanel → phpMyAdmin → SQL**.
-> Everything from section 4.2 onward is fully driven from the application;
-> only this first-time setup is not. See
-> [section 12](#12-what-the-application-does-not-do-yet).
+### 6.1 Creating a tournament
 
-Work through these in order — each depends on the one before.
+**Administration → Tournaments → Create a tournament.**
 
-**Step 1 — the tournament.** One row defines the rules for the whole season.
+| Field | Means |
+|-------|-------|
+| Tournament name | Shown everywhere. Unique within a season |
+| Season | The year |
+| **Auction date** | When the hammer falls. **Entries close at the end of this day** |
+| **Start date** | First ball of the season. Must be on or after the auction |
+| **End date** | Last day of the season |
+| **Team name change deadline** | The last day an owner may rename their own team |
+| Purse per team | Money each team starts with, in rupees. 5000000 = ₹50 L |
+| Bid increment | The step between bids. 50000 = ₹50,000 |
+| Minimum squad | Smallest legal squad. Drives the reserve rule in 7.5 |
+| Maximum squad | A team at this number cannot bid again |
+| Overseas limit | Overseas players one squad may hold |
+| Overs per innings | 20 for T20 |
 
-```sql
-INSERT INTO tournaments
-  (name, season_year, purse_per_team, min_squad_size, max_squad_size,
-   max_overseas, bid_increment, bid_timer_seconds, overs_per_innings, status)
-VALUES
-  ('APL', 2026, 50000000.00, 11, 15, 4, 500000.00, 30, 20, 'auction');
-```
+The dates are checked against each other: the end cannot precede the start,
+the auction cannot fall after the first ball, and the name deadline cannot
+outlast the season. Any of them may be left blank while the calendar is still
+being settled, and filled in later.
 
-| Setting | Means |
-|---------|-------|
-| `purse_per_team` | Money each team starts with, in rupees. 50000000 = ₹5 Cr |
-| `min_squad_size` | Smallest legal squad. Drives the reserve rule in 5.4 |
-| `max_squad_size` | A team at this number cannot bid again |
-| `max_overseas` | Overseas players one squad may hold |
-| `bid_increment` | The step between bids. 500000 = ₹5 L |
-| `bid_timer_seconds` | Countdown, restarted by every bid |
-| `overs_per_innings` | 20 for T20 |
+**The secret code is generated for you** and shown on the tournament card in
+large type. That code is the only way a player joins. Give it out however you
+like — a WhatsApp group, a poster, read out at a meeting.
 
-**Step 2 — the teams.** One row per franchise.
+Why the name change deadline exists: a team is usually named before its squad
+is known. Setting the deadline a few days after the auction lets an owner
+settle on a name with the players they actually signed, and then freezes it
+before fixtures are printed.
 
-```sql
-INSERT INTO teams (tournament_id, name, short_name, primary_color, home_venue, purse_total)
-VALUES
-  (1, 'Coastal Titans', 'CT', '#22c55e', 'Marine Drive Ground', 50000000.00),
-  (1, 'Metro Royals',   'MR', '#f59e0b', 'City Sports Complex', 50000000.00);
-```
+### 6.2 Approving registrations
 
-`short_name` is the 2–3 letter badge shown throughout. `primary_color` must
-be a hex colour and becomes that team's accent.
+**Administration → People.**
 
-**Step 3 — the players.** One row per player in the pool.
+The **Waiting** tab lists everyone who has registered and not yet been
+decided on. Each entry shows the name, email, mobile, address, kind of player
+and photo — everything they submitted.
 
-```sql
-INSERT INTO players
-  (tournament_id, full_name, display_name, country, role, batting_style,
-   bowling_style, is_overseas, auction_set, base_price)
-VALUES
-  (1, 'Aarav Sharma', 'A Sharma', 'India', 'batsman',     'right_hand', 'none',            0, 'Marquee', 2000000.00),
-  (1, 'Rohan Iyer',   'R Iyer',   'India', 'bowler',      'right_hand', 'right_arm_fast',  0, 'Set A',   1000000.00),
-  (1, 'Kabir Nair',   'K Nair',   'India', 'all_rounder', 'left_hand',  'left_arm_orthodox',0,'Set A',   1000000.00);
-```
+- **Approve** — they can now sign in and apply to a tournament.
+- **Reject** — they cannot sign in. The screen tells them so plainly.
 
-`role` must be one of `batsman`, `bowler`, `all_rounder`, `wicket_keeper`.
-`auction_set` is a free label used to group the pool (Marquee, Set A …).
+Approving here does **not** put anybody in an auction. It says only that the
+person is real.
 
-**Step 4 — the auction order.** Every player needs a lot; `lot_order` is the
-sequence they come up in. This creates them all at once, cheapest sets last:
+**Edit details** opens the same person for correction. This is the only place
+a name or email can be changed, which is the point: a player cannot quietly
+become somebody else, but a genuine typo is still fixable.
 
-```sql
-INSERT INTO auction_lots (tournament_id, player_id, lot_order, status, base_price)
-SELECT 1, id, ROW_NUMBER() OVER (ORDER BY base_price DESC, id), 'queued', base_price
-FROM players WHERE tournament_id = 1;
-```
+**Account status** can be set to Suspended at any time. A suspended account is
+signed out on its very next click, not whenever its session happens to
+expire.
 
-**Step 5 — the accounts.** Passwords must be stored hashed, and SQL cannot
-hash. Generate each one first — see [section 10](#10-changing-a-password) —
-then:
+### 6.3 Letting players into a tournament
 
-```sql
-INSERT INTO users (name, email, password_hash, role, team_id) VALUES
-  ('Tournament Director', 'director@yourclub.in', '<hash>', 'admin',      NULL),
-  ('Match Scorer',        'scorer@yourclub.in',   '<hash>', 'scorer',     NULL),
-  ('Coastal Titans Owner','ct@yourclub.in',       '<hash>', 'team_owner', 1);
-```
+**Administration → Applications.**
 
-An owner **must** have a `team_id`; an admin, scorer or viewer must not. The
-database refuses anything else.
+Pick the tournament along the top; the badge is how many are waiting. Each
+application shows the player's details and, on the same row, the three things
+you set at the moment of approval:
 
-**Step 6 — check it.** Open the landing page. It should show your tournament
-name, your team count and your player count. If it still shows old data, you
-did not clear it — see [section 8](#8-preparing-a-clean-application).
+| Field | Means |
+|-------|-------|
+| Base price | The lowest anyone may bid for them. Defaults to ₹2,00,000 |
+| Auction set | A free label used to group the pool — Marquee, Set A … |
+| Overseas | Counts against the tournament's overseas limit |
+| Note | Kept on the record with your name and the date |
 
-### 4.2 Running the auction
+**Approve** creates the player record and their auction lot in one step, at
+the back of the queue. The moment you press it they are in the auction list.
+**Reject** creates nothing; the player may apply again.
+
+### 6.4 Creating teams and naming owners
+
+**Administration → Teams.**
+
+Choose the person who will own the team, give it a working name and a 2–6
+character short name, and press **Create team**. The purse comes from the
+tournament.
+
+The name really can be a placeholder — the owner sets the real one
+themselves, and can change it up to the deadline. That is what the deadline
+is for.
+
+**Assign** hands a team to a different owner. The outgoing owner is released
+in the same step, because one team may only ever have one owner.
+
+### 6.5 Creating scorer accounts
+
+**Administration → People → Create a scorer or administrator.**
+
+Fill in a name, a username, an email and the role. Leave the password blank
+and one is generated — two four-character groups with none of the confusable
+characters in them, so it can be read down a phone line.
+
+The credentials appear once, on the next screen. **They are not stored
+anywhere readable**, so write them down or send them before you navigate
+away. The account is forced to change the password at first sign-in, so what
+you hand over never stays in use.
+
+**Reset password** on any person does the same thing for an account that is
+locked out.
+
+### 6.6 Running the auction
 
 Sign in as the administrator and open the auction board. Your control rail
 sits under the player card.
@@ -212,7 +376,7 @@ UPDATE players
 Bids from the first round stay in the log as history; the new round starts
 from the base price again.
 
-### 4.3 Setting up a match
+### 6.7 Setting up a match
 
 Once two squads exist. Again phpMyAdmin, for now.
 
@@ -241,9 +405,35 @@ sees a demonstration match instead of yours.
 
 ---
 
-## 5. Team Owner
+## 7. Team Owner
 
-### 5.1 Reading the screen
+### 7.1 Naming your team
+
+An administrator creates your team and names you as its owner. It then
+appears under **My team**.
+
+Set the **team name**, the **short name** (2 to 6 letters or digits — the
+badge on the scoreboard, like MI or CSK), the team colour and, if you like, a
+home ground.
+
+You may change all of it as often as you want **until the team name change
+deadline**, which the screen states in plain words:
+
+> You can change the name until 10 September 2026. After that only an
+> administrator can.
+
+Once that day has passed the name and short name are shown greyed out and the
+screen says so. The colour and home ground stay editable. This is deliberate:
+a team is usually named before its squad is known, and the deadline gives you
+room to settle a name with the players you actually signed, then freezes it
+before fixtures are printed.
+
+A name has to be unique within the tournament. A team in a different
+tournament may use it — that is not a clash.
+
+**My team** also shows your remaining purse and everyone you have bought.
+
+### 7.2 Reading the auction screen
 
 | Area | Shows |
 |------|-------|
@@ -257,14 +447,14 @@ sees a demonstration match instead of yours.
 
 The header shows your remaining purse at all times.
 
-### 5.2 Placing a bid
+### 7.3 Placing a bid
 
 Press one of the four amount buttons, or the big **Bid** button for the
 smallest legal raise. That is the whole action — there is nothing to confirm.
 
 The countdown restarts on every bid, including yours.
 
-### 5.3 Why a bid can be refused
+### 7.4 Why a bid can be refused
 
 A greyed-out button means it is already impossible. If a bid is refused after
 you press it, a message says why:
@@ -281,7 +471,7 @@ you press it, a message says why:
 None of these are errors. Two owners pressing at the same instant is normal;
 the application decides one winner and tells the other immediately.
 
-### 5.4 Why you cannot spend your whole purse
+### 7.5 Why you cannot spend your whole purse
 
 You must still be able to complete a legal squad. So the most you can bid is:
 
@@ -294,7 +484,7 @@ ceiling is ₹30 L.
 The refusal message always tells you the exact ceiling, so you never have to
 work it out during bidding.
 
-### 5.5 Practical advice
+### 7.6 Practical advice
 
 - The reserve shrinks as your squad fills — your last few picks can be your
   biggest.
@@ -303,12 +493,12 @@ work it out during bidding.
 
 ---
 
-## 6. Scorer
+## 8. Scorer
 
 Designed for a phone, one-handed, in sunlight. Every key is deliberately
 large; a mis-tap here corrupts the match record, not just the view.
 
-### 6.1 Before the first ball
+### 8.1 Before the first ball
 
 Open the pad. It asks for three things in turn:
 
@@ -326,7 +516,7 @@ Check the badge at the top:
 - **Demo** — you are on the demonstration match; nothing is saved. Sign in as
   the scorer, and confirm with your administrator that a live match exists
 
-### 6.2 The pad
+### 8.2 The pad
 
 | Control | Use |
 |---------|-----|
@@ -342,7 +532,7 @@ Check the badge at the top:
 
 On a laptop: `0`–`6` for runs, `W` wicket, `D` wide, `N` no ball, `U` undo.
 
-### 6.3 Recording a wicket
+### 8.3 Recording a wicket
 
 **WICKET** → choose how: Bowled, Caught, LBW, Run out, Stumped, Hit wicket.
 
@@ -352,7 +542,7 @@ On a laptop: `0`–`6` for runs, `W` wicket, `D` wide, `N` no ball, `U` undo.
 
 Confirm, then pick the next batter. Scoring resumes.
 
-### 6.4 Undo
+### 8.4 Undo
 
 **Undo** removes the last ball entirely — score, over, both batters' figures
 and the bowler's, all recalculated. Use it for any mistake, including the
@@ -361,7 +551,7 @@ wrong batter on strike.
 There is no redo. Undo removes one ball at a time; press it twice to remove
 two.
 
-### 6.5 What the pad handles for you
+### 8.5 What the pad handles for you
 
 You never have to work these out:
 
@@ -373,7 +563,7 @@ You never have to work these out:
 - Maidens, strike rates and economy
 - A bowler being blocked from bowling consecutive overs
 
-### 6.6 What it will not let you do
+### 8.6 What it will not let you do
 
 Refusals are protections, not faults:
 
@@ -389,7 +579,7 @@ Refusals are protections, not faults:
 
 ---
 
-## 7. Viewer
+## 9. Viewer
 
 No account needed. Open the application and choose **Watch live**, or go
 directly to `/auction.php?role=viewer`.
@@ -405,7 +595,7 @@ Read-only throughout — nothing a viewer does can change anything.
 
 ---
 
-## 8. Preparing a clean application
+## 10. Preparing a clean application
 
 Two scripts, in `database/`. Both are run from
 **cPanel → phpMyAdmin → select your database → SQL**.
@@ -413,7 +603,7 @@ Two scripts, in `database/`. Both are run from
 > On shared hosting, delete any `USE` line at the top first, or run
 > `deploy/strip-create-database.sh` to get pre-stripped copies.
 
-### 8.1 A genuinely empty application
+### 10.1 A genuinely empty application
 
 `database/reset.sql` deletes every player, team, user, bid, match and ball,
 leaving the table structure untouched. It then creates a single administrator
@@ -425,10 +615,10 @@ Afterwards every screen says so plainly — the landing page drops its live
 strip, the auction board reads **"No auction is running"** and the scoring
 pad reads **"No match is being scored"**. That is correct for an empty
 application, not a fault. Follow
-[section 4.1](#41-before-the-auction-loading-the-tournament) to load your own
+[section 6.1](#61-creating-a-tournament) to load your own
 tournament.
 
-### 8.2 A dataset for demonstrating
+### 10.2 A dataset for demonstrating
 
 `database/demo_apl.sql` loads a complete, coherent tournament: six
 franchises, a 60-player pool, an auction part way through with a player under
@@ -439,41 +629,89 @@ to score from the first ball.
 Run database/reset.sql first, then database/demo_apl.sql
 ```
 
-All demonstration accounts use the password `ChangeMe@2026`:
+All demonstration accounts use the password `ChangeMe@2026`, and none of them
+is forced to change it — a demonstration should not open on a password
+prompt. Sign in with the username or the email, whichever you prefer.
 
-| Role | Email |
-|------|-------|
-| Administrator | `admin@apl.local` |
-| Scorer | `scorer@apl.local` |
-| Viewer | `viewer@apl.local` |
-| Team owners | `ct@apl.local`, `mr@apl.local`, `hc@apl.local`, `df@apl.local`, `hw@apl.local`, `sl@apl.local` |
+| Role | Username | Email |
+|------|----------|-------|
+| Administrator | `apl.admin` | `admin@apl.local` |
+| Scorer | `apl.scorer` | `scorer@apl.local` |
+| Viewer | `apl.viewer` | `viewer@apl.local` |
+| Team owners | `apl.ct`, `apl.mr`, `apl.hc`, `apl.df`, `apl.hw`, `apl.sl` | `ct@apl.local` … `sl@apl.local` |
+
+The usernames are prefixed so this file can be imported straight on top of
+the single `admin` account `reset.sql` creates.
+
+**The demonstration tournament's secret code is `BATSMAN7`** — fixed and
+memorable for a demonstration, but still drawn only from the legal alphabet.
+Real codes are generated. Its four dates are written relative to the day you
+import it: the auction is today, the season starts in a fortnight, team names
+lock in a week. So the demonstration never opens on a season that finished
+last year.
 
 **This is demonstration data.** Run `reset.sql` again before real use — that
 password is published in the project repository.
 
 ---
 
-## 9. Demonstration script
+## 11. Demonstration script
 
-A 12-minute walkthrough. Load `reset.sql` then `demo_apl.sql` immediately
+A 16-minute walkthrough. Load `reset.sql` then `demo_apl.sql` immediately
 beforehand so the starting state is predictable.
 
 **Preparation.** Two browsers, or one normal and one private window — you
 need to be signed in as two people at once.
 
-- Window A: administrator, on the auction board
-- Window B: a team owner (`hc@apl.local`), on the auction board
+- Window A: administrator (`apl.admin`), on the administration hub
+- Window B: a team owner (`apl.hc`), on the auction board
 - Have the landing page ready in a third tab
+- Know the demonstration secret code: **`BATSMAN7`**
 
 ### Minute 0–2 — the problem and the front door
 
 Open the landing page. It states what the application does, shows the live
 auction and match, and offers a card per role.
 
-> "Four kinds of people use this, and each gets a screen built for what they
+> "Five kinds of people use this, and each gets a screen built for what they
 > actually do."
 
-### Minute 2–6 — the auction
+### Minute 2–6 — a player joins, and an administrator lets them in
+
+This is the part investors ask about, because it is where the trust is.
+
+Third tab: **Register as a player**. Fill it in quickly — invent a name, use
+an obviously fake email. Press **Continue**.
+
+> "Notice what it does before saving anything. It shows the name and the
+> email back and says, in as many words, that these two are permanent. A
+> player can change their mobile, address and photo whenever they like. Not
+> their identity."
+
+Press **Confirm and register**. Point at the message: nothing is open to them
+yet.
+
+Try to sign in as the new player. It refuses — and says why: still waiting
+for an administrator.
+
+> "The password was correct. It says so only *after* the password is right,
+> so it cannot be used to find out who has an account here."
+
+Window A: **People → Waiting**. The registration is there with the photo and
+every detail. Press **Approve**.
+
+Sign in as the player. **Join a tournament** → type `BATSMAN7` → **Apply**.
+
+> "Applying is not entry. The organisers hand out that code, and the code
+> gets you as far as a queue."
+
+Window A: **Applications**. Set a base price, press **Approve**.
+
+> "That one press wrote the player record and their auction lot in a single
+> transaction. Approved and 'in the auction list' are the same event — there
+> is no third step for a volunteer to forget on the morning of the auction."
+
+### Minute 6–10 — the auction
 
 Window B (owner): point out the purse in the header, the player under the
 hammer, the countdown.
@@ -498,7 +736,7 @@ Worth saying: two owners bidding in the same millisecond is handled by a row
 lock, so exactly one wins and the other is told immediately. It has been
 tested by racing four bidders at the same amount.
 
-### Minute 6–10 — the scoring
+### Minute 10–14 — the scoring
 
 Sign in as the scorer (`scorer@apl.local`) and open the pad. Ideally on a
 phone, or a narrow browser window.
@@ -514,7 +752,7 @@ phone, or a narrow browser window.
 > runs are charged to the bowler — the application works those out. And every
 > number on screen is derived from the ball log, which is why Undo is exact."
 
-### Minute 10–12 — the viewer, and closing
+### Minute 14–16 — the viewer, and closing
 
 Open a private window with no login, choose **Watch live**. The board is
 there, read-only.
@@ -534,32 +772,45 @@ Answering those plainly is better than being caught by them.
 
 ---
 
-## 10. Changing a password
+## 12. Passwords
 
-Two steps, because passwords are stored hashed and SQL cannot hash.
+### Changing your own
 
-**Step 1 — make the hash.** Create a file called `hash.php` in the
-application's `public/` folder:
+**Password** in the top navigation, on every signed-in screen. You need your
+current password, and the new one needs at least 8 characters with a letter
+and a number. It cannot be the same as the old one.
 
-```php
-<?php echo password_hash('your-new-password', PASSWORD_BCRYPT, ['cost' => 12]);
-```
+### An account that was issued a password
 
-Open `https://your-site/APL/hash.php`, copy the line beginning `$2y$12$…`,
-then **delete the file immediately**.
+When an administrator creates a scorer, or resets anybody's password, the
+account is marked as needing to choose its own. The next sign-in goes
+straight to the change-password screen and stays there — no other screen will
+open until the password has been replaced. A password read out over the phone
+therefore never survives its first use.
 
-**Step 2 — save it.** phpMyAdmin → SQL:
+### Somebody is locked out
 
-```sql
-UPDATE users SET password_hash = '<paste the hash>' WHERE email = 'you@yourclub.in';
-```
+**Administration → People → Reset password** on their row. A new password is
+generated and shown once. Read it to them; they will be asked to change it
+immediately.
 
-There is no self-service password reset, so an administrator does this for
-anyone who is locked out.
+### The very first administrator
+
+`database/reset.sql` creates one account:
+
+| Username | `admin` |
+|----------|---------|
+| Email | `admin@example.com` |
+| Password | `ChangeMe@2026` |
+
+That password is published in the project repository, so the account is
+created with the forced-change flag set: the first sign-in cannot get past
+the change-password screen. Change it, then edit the name and email under
+**People**.
 
 ---
 
-## 11. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
@@ -568,9 +819,17 @@ anyone who is locked out.
 | **503 Service temporarily unavailable** | The database is unreachable | Check `DB_*` in `.env`, then `storage/logs/php-error.log` |
 | Scorer badge says **Demo** | Not signed in as scorer/admin, or no live match | Sign in; confirm a match with `status = 'live'` and an open innings |
 | Landing page shows an old tournament | Previous data still loaded | Run `reset.sql` |
-| **"No auction is running" / "No match is being scored"** | The database is empty, or no lot is live and no innings is open | Expected on a clean install. Load a tournament (4.1) and open a lot (4.2), or a fixture (4.3) |
+| **"Your registration is still waiting for an administrator"** | The account is real but not approved | Administration → People → Waiting → Approve |
+| Sign-in always lands on "Change password" | The password was issued or reset by an administrator | Change it; every other screen opens afterwards |
+| A player applied but is not in the auction | The application has not been approved | Administration → Applications → Approve. That is the step that creates the lot |
+| **"That code does not match any tournament"** | Wrong code, or the code was re-issued | Check it; Administration → Tournaments shows the current one |
+| **"Entries are closed"** | The auction date has passed, or entries were closed by hand | Administration → Tournaments → Open entries, or move the auction date |
+| An owner cannot rename their team | The team name change deadline has passed | An administrator can still rename it, under Administration → Teams |
+| **"Another team in this tournament is already called…"** | Names are unique within a tournament | Pick a different one; the same name in a different season is fine |
+| Signed in, but told "You do not own a team" | The team was assigned in another window | It refreshes on the next click; if not, sign out and in |
+| **"No auction is running" / "No match is being scored"** | The database is empty, or no lot is live and no innings is open | Expected on a clean install. Create a tournament (6.1), let players in (6.3) and open a lot (6.6), or set up a fixture (6.7) |
 | `#1701 Cannot truncate a table referenced in a foreign key constraint` | An old copy of `reset.sql` that used TRUNCATE | Use the current `reset.sql`; it uses DELETE and works with foreign key checks on |
-| Bid button greyed out | Leading, purse-blocked, or squad full | Hover for the reason; see 5.3 |
+| Bid button greyed out | Leading, purse-blocked, or squad full | Hover for the reason; see 7.4 |
 | Auction board not updating | Lost connection | It refreshes every 3 seconds; reload the page |
 | "Not Found" on a page | That file was not uploaded | Re-upload `public/` |
 
@@ -579,39 +838,52 @@ folder, and cPanel → Metrics → Errors.
 
 ---
 
-## 12. What the application does not do yet
+## 14. What the application does not do yet
 
 Stated plainly so nobody is surprised mid-tournament.
 
-**1. No setup screens.** Tournaments, teams, players, user accounts and
-fixtures are created in phpMyAdmin. Everything after setup — the whole
-auction, the whole first innings — is driven from the application. This is
-the single biggest gap and the obvious next thing to build, along with a CSV
-import so a 60-player pool does not have to be typed.
+**1. No bulk player import.** Registrations, approvals, tournaments, teams
+and owners all have screens now. What is still missing is a CSV import, so a
+club moving an existing 60-player pool across has to have each player
+register, or an administrator add them in phpMyAdmin.
 
-**2. Only the first innings.** Ball-by-ball scoring, the live scorecard and
+**2. Fixtures are still set up in the database.** Creating a match, the
+playing elevens and the first innings is SQL — see
+[section 6.7](#67-setting-up-a-match). Everything from the first ball onward
+is driven from the application.
+
+**3. Only the first innings.** Ball-by-ball scoring, the live scorecard and
 undo are complete for one innings. The innings break, the second-innings
 target, the chase and the match result are not implemented. A match can be
 scored through the first innings and no further.
 
-**3. No password self-service.** An administrator sets every password by hand.
-
 **4. No sale undo.** Pressing **Sold** is final; correcting it needs a
 database edit.
 
-**5. Screens refresh every 3 seconds** rather than being pushed instantly.
+**5. No email.** Approvals, rejections and issued passwords are not emailed —
+somebody has to tell the person. Every state is visible on their own screen
+when they next sign in.
+
+**6. No password reset by email.** An administrator resets it and reads out
+the new one.
+
+**7. Screens refresh every 3 seconds** rather than being pushed instantly.
 Fine for a club tournament; worth revisiting for a large audience.
 
-**6. No fixtures, points table or player statistics screens.** The data is
+**8. No fixtures, points table or player statistics screens.** The data is
 recorded — the schema holds fixtures, results and every ball — but there are
 no pages that display it yet.
 
 ---
 
-## 13. Glossary
+## 15. Glossary
 
 | Term | Meaning |
 |------|---------|
+| **Secret code** | The eight characters a player types to join a tournament. Never contains 0, O, o, 1, I, l or i |
+| **Application** | A player asking to join a tournament. Approving one is what creates their auction lot |
+| **Approved** | Two meanings, deliberately separate: an approved *account* is a real person; an approved *application* is in the auction |
+| **Name change deadline** | The last day an owner may rename their own team |
 | **Lot** | One player being auctioned |
 | **Base price** | The lowest a player can be bought for |
 | **Purse** | Money a team has to spend |

@@ -138,8 +138,13 @@ $o[] = "--  Every account here uses the password  ChangeMe@2026";
 $o[] = "--  This is demonstration data. Run reset.sql again before real use.";
 $o[] = "-- =====================================================================";
 $o[] = "";
-$o[] = "INSERT INTO `tournaments` (`id`,`name`,`season_year`,`purse_per_team`,`min_squad_size`,`max_squad_size`,`max_overseas`,`bid_increment`,`bid_timer_seconds`,`overs_per_innings`,`balls_per_over`,`status`) VALUES";
-$o[] = "  (1, 'APL', 2026, 50000000.00, 11, 15, 4, 500000.00, 30, 20, 6, 'auction');";
+// The four dates are written relative to the day the file is imported, so a
+// demonstration never opens on a season that finished last year. The auction
+// is "today", which is also what the live lot in this file represents.
+$o[] = "INSERT INTO `tournaments` (`id`,`name`,`season_year`,`secret_code`,`auction_date`,`start_date`,`end_date`,`team_name_change_deadline`,`registration_open`,`purse_per_team`,`min_squad_size`,`max_squad_size`,`max_overseas`,`bid_increment`,`bid_timer_seconds`,`overs_per_innings`,`balls_per_over`,`status`) VALUES";
+// The demonstration code is fixed and memorable, but still drawn only from
+// the legal alphabet — no 0/O/o, no 1/I/l/i. A real one is generated.
+$o[] = "  (1, 'APL', 2026, 'BATSMAN7', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 1, 50000000.00, 11, 15, 4, 500000.00, 30, 20, 6, 'auction');";
 $o[] = "";
 $o[] = "INSERT INTO `teams` (`id`,`tournament_id`,`name`,`short_name`,`primary_color`,`home_venue`,`purse_total`,`purse_spent`,`players_bought`,`overseas_bought`) VALUES";
 $rows = [];
@@ -149,14 +154,18 @@ foreach ($teams as [$tid, $name, $short, $colour, $venue]) {
 }
 $o[] = implode(",\n", $rows) . ";";
 $o[] = "";
-$o[] = "INSERT INTO `users` (`name`,`email`,`password_hash`,`role`,`team_id`) VALUES";
+// Demonstration accounts are approved and are NOT forced to change their
+// password — a demonstration should not open on a password prompt.
+// Usernames are prefixed so this file can be imported on top of the single
+// administrator reset.sql creates, whose username is plain "admin".
+$o[] = "INSERT INTO `users` (`username`,`name`,`email`,`password_hash`,`role`,`status`,`team_id`) VALUES";
 $rows = [];
-$rows[] = sprintf("  (%s, %s, %s, 'admin', NULL)",  $q('Tournament Director'), $q('admin@apl.local'),  $q($PW));
-$rows[] = sprintf("  (%s, %s, %s, 'scorer', NULL)", $q('Match Scorer'),        $q('scorer@apl.local'), $q($PW));
-$rows[] = sprintf("  (%s, %s, %s, 'viewer', NULL)", $q('Guest Viewer'),        $q('viewer@apl.local'), $q($PW));
+$rows[] = sprintf("  (%s, %s, %s, %s, 'admin', 'approved', NULL)",  $q('apl.admin'),  $q('Tournament Director'), $q('admin@apl.local'),  $q($PW));
+$rows[] = sprintf("  (%s, %s, %s, %s, 'scorer', 'approved', NULL)", $q('apl.scorer'), $q('Match Scorer'),        $q('scorer@apl.local'), $q($PW));
+$rows[] = sprintf("  (%s, %s, %s, %s, 'viewer', 'approved', NULL)", $q('apl.viewer'), $q('Guest Viewer'),        $q('viewer@apl.local'), $q($PW));
 foreach ($teams as [$tid, $name, $short]) {
-    $rows[] = sprintf("  (%s, %s, %s, 'team_owner', %d)",
-        $q($name . ' Owner'), $q(strtolower($short) . '@apl.local'), $q($PW), $tid);
+    $rows[] = sprintf("  (%s, %s, %s, %s, 'team_owner', 'approved', %d)",
+        $q('apl.' . strtolower($short)), $q($name . ' Owner'), $q(strtolower($short) . '@apl.local'), $q($PW), $tid);
 }
 $o[] = implode(",\n", $rows) . ";";
 $o[] = "";
