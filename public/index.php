@@ -34,6 +34,9 @@ function homeFor(?string $role): string
 {
     return match ($role) {
         Auth::ROLE_SCORER => 'score.php',
+        Auth::ROLE_ADMIN  => 'admin/index.php',
+        Auth::ROLE_PLAYER => 'profile.php',
+        Auth::ROLE_OWNER  => 'team.php',
         default           => 'auction.php',
     };
 }
@@ -94,8 +97,19 @@ $roleLabels = [
     'all_rounder' => 'All-rounder', 'wicket_keeper' => 'Wicket-keeper',
 ];
 
-/** The four roles, in the order a visitor is most likely to need them. */
+/** The five roles, in the order a visitor is most likely to need them. */
 $roles = [
+    [
+        'key'   => Auth::ROLE_PLAYER,
+        'name'  => 'Player',
+        'lead'  => 'You want to be picked',
+        'blurb' => 'Register yourself, then join a tournament with the code the organisers give you. Once an administrator approves you, your name goes into the auction.',
+        'does'  => ['Register in two minutes', 'Join with a tournament code', 'See what you sold for'],
+        'href'  => 'register.php',
+        'cta'   => 'Register as a player',
+        'open'  => true,
+        'accent' => 'emerald',
+    ],
     [
         'key'   => Auth::ROLE_VIEWER,
         'name'  => 'Viewer',
@@ -111,9 +125,9 @@ $roles = [
         'key'   => Auth::ROLE_OWNER,
         'name'  => 'Team Owner',
         'lead'  => 'You own a franchise',
-        'blurb' => 'Bid for players in the live auction. Your purse and squad limits are enforced as you go.',
-        'does'  => ['Place bids in real time', 'Watch your remaining purse', 'Review your squad'],
-        'href'  => 'auction.php',
+        'blurb' => 'Name your team, then bid for players in the live auction. Your purse and squad limits are enforced as you go.',
+        'does'  => ['Name and rename your team', 'Place bids in real time', 'Watch your remaining purse'],
+        'href'  => 'team.php',
         'cta'   => 'Sign in to bid',
         'open'  => false,
         'accent' => 'emerald',
@@ -133,9 +147,9 @@ $roles = [
         'key'   => Auth::ROLE_ADMIN,
         'name'  => 'Admin',
         'lead'  => 'You run the tournament',
-        'blurb' => 'Control the hammer: open a lot, sell or pass, and move the auction along. Manage fixtures and squads.',
-        'does'  => ['Open the next player', 'Sold / unsold decisions', 'Fixtures and match setup'],
-        'href'  => 'auction.php',
+        'blurb' => 'Create the tournament, approve who gets in, and control the hammer: open a lot, sell or pass, and move the auction along.',
+        'does'  => ['Approve players and teams', 'Create tournaments and codes', 'Sold / unsold decisions'],
+        'href'  => 'admin/index.php',
         'cta'   => 'Sign in as admin',
         'open'  => false,
         'accent' => 'violet',
@@ -200,8 +214,11 @@ $accents = [
                 <a href="auction.php?role=viewer" class="rounded-lg px-3 py-2 text-[12px] font-semibold text-slate-300 transition hover:bg-white/5">
                     Watch live
                 </a>
-                <a href="login.php" class="rounded-lg bg-emerald-400 px-3.5 py-2 text-[12px] font-black uppercase tracking-wide text-ink-900 transition hover:brightness-110">
+                <a href="login.php" class="rounded-lg px-3 py-2 text-[12px] font-semibold text-slate-300 transition hover:bg-white/5">
                     Sign in
+                </a>
+                <a href="register.php" class="rounded-lg bg-emerald-400 px-3.5 py-2 text-[12px] font-black uppercase tracking-wide text-ink-900 transition hover:brightness-110">
+                    Register
                 </a>
             <?php endif; ?>
         </nav>
@@ -233,8 +250,12 @@ $accents = [
                     Continue as <?= e(str_replace('_', ' ', (string) $role)) ?>
                 </a>
             <?php else: ?>
-                <a href="auction.php?role=viewer"
+                <a href="register.php"
                    class="rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-6 py-3.5 text-sm font-black uppercase tracking-wide text-ink-900 shadow-lg shadow-emerald-500/25 transition hover:brightness-110">
+                    Register as a player
+                </a>
+                <a href="auction.php?role=viewer"
+                   class="rounded-xl border border-white/15 px-6 py-3.5 text-sm font-black uppercase tracking-wide text-slate-200 transition hover:bg-white/5">
                     Watch the live board
                 </a>
                 <a href="login.php"
@@ -297,10 +318,10 @@ $accents = [
     <section class="mb-14">
         <h2 class="text-2xl font-black tracking-tight text-white sm:text-3xl">Where should you go?</h2>
         <p class="mt-2 max-w-2xl text-[14px] text-slate-400">
-            Four kinds of people use this. Pick the one that describes you.
+            Five kinds of people use this. Pick the one that describes you.
         </p>
 
-        <div class="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <?php foreach ($roles as $r): ?>
                 <?php
                 $a       = $accents[$r['accent']];

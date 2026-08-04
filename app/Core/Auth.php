@@ -162,6 +162,13 @@ final class Auth
         return self::user()['role'] ?? self::ROLE_VIEWER;
     }
 
+    public static function id(): ?int
+    {
+        $id = self::user()['id'] ?? null;
+
+        return $id === null ? null : (int) $id;
+    }
+
     public static function teamId(): ?int
     {
         return self::user()['team_id'] ?? null;
@@ -170,6 +177,51 @@ final class Auth
     public static function is(string ...$roles): bool
     {
         return in_array(self::role(), $roles, true);
+    }
+
+    /**
+     * Re-read the parts of the session that an administrator can change
+     * underneath somebody who is already signed in: their role, their team,
+     * whether the account is still approved, and whether a reset has left a
+     * password that must be replaced.
+     *
+     * Without this, an owner assigned a team mid-session keeps being told
+     * they have none until they sign out and back in, and — the part that
+     * matters — a suspended account keeps working until its session
+     * expires. One indexed primary-key read per gated request is a fair
+     * price for both.
+     *
+     * @return bool false when the account may no longer be here
+     */
+    public static function refresh(): bool
+    {
+        $id = self::id();
+
+        if ($id === null) {
+            return false;
+        }
+
+        try {
+            $row = \Database::one(
+                'SELECT role, status, team_id, must_change_password, is_active
+                   FROM users WHERE id = :id',
+                [':id' => $id]
+            );
+        } catch (\Throwable) {
+            // A database that is briefly unreachable must not sign everybody
+            // out; the session stands until it comes back.
+            return true;
+        }
+
+        if ($row === null || (int) $row['is_active'] !== 1 || $row['status'] !== 'approved') {
+            return false;
+        }
+
+        $_SESSION['user']['role']                 = $row['role'];
+        $_SESSION['user']['team_id']              = $row['team_id'] !== null ? (int) $row['team_id'] : null;
+        $_SESSION['user']['must_change_password'] = (int) $row['must_change_password'] === 1;
+
+        return true;
     }
 
     /** Hard gate for controller actions. Halts the request on failure. */
@@ -182,6 +234,14 @@ final class Auth
 
         if (!self::check()) {
             header('Location: ' . $base . '/login.php');
+            exit;
+        }
+
+        // An account that has been suspended, rejected or deleted since it
+        // signed in stops here rather than at the end of its session.
+        if (!self::refresh()) {
+            self::logout();
+            header('Location: ' . $base . '/login.php?ended=1');
             exit;
         }
 

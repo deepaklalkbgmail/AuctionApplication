@@ -48,22 +48,11 @@ final class AccountService
      */
     public function register(array $in, ?array $photo = null): int
     {
-        $name     = $this->text($in['name'] ?? '', 'Full name', 2, 120);
-        $email    = $this->email($in['email'] ?? '');
-        $username = $this->username($in['username'] ?? '');
-        $phone    = $this->phone($in['phone'] ?? '');
-        $address  = $this->text($in['address'] ?? '', 'Address', 5, 255);
-        $type     = $this->playerType($in['player_type'] ?? '');
-        $password = (string) ($in['password'] ?? '');
-
-        $this->assertPasswordStrong($password);
-
-        if ($password !== (string) ($in['password_confirm'] ?? $password)) {
-            throw new AccountException(AccountException::VALIDATION, 'The two passwords do not match.');
-        }
-
-        $this->assertEmailFree($email);
-        $this->assertUsernameFree($username);
+        [
+            'name' => $name, 'email' => $email, 'username' => $username,
+            'phone' => $phone, 'address' => $address, 'player_type' => $type,
+            'password' => $password,
+        ] = $this->validateRegistration($in);
 
         $photoPath = $photo !== null && ($photo['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_NO_FILE
             ? $this->storePhoto($photo)
@@ -86,6 +75,42 @@ final class AccountService
         );
 
         return Database::lastInsertId();
+    }
+
+    /**
+     * Check a registration without creating anything.
+     *
+     * The registration form has a confirmation step — the player is shown
+     * their name and email once more, because those two are permanent — and
+     * that step needs to know the details are good *before* it can honestly
+     * ask "is this right?". So validation lives here, and register() calls
+     * the same method rather than repeating it.
+     *
+     * @param  array<string,mixed> $in
+     * @return array<string,string> the cleaned values
+     */
+    public function validateRegistration(array $in): array
+    {
+        $clean = [
+            'name'        => $this->text($in['name'] ?? '', 'Full name', 2, 120),
+            'email'       => $this->email($in['email'] ?? ''),
+            'username'    => $this->username($in['username'] ?? ''),
+            'phone'       => $this->phone($in['phone'] ?? ''),
+            'address'     => $this->text($in['address'] ?? '', 'Address', 5, 255),
+            'player_type' => $this->playerType($in['player_type'] ?? ''),
+            'password'    => (string) ($in['password'] ?? ''),
+        ];
+
+        $this->assertPasswordStrong($clean['password']);
+
+        if ($clean['password'] !== (string) ($in['password_confirm'] ?? $clean['password'])) {
+            throw new AccountException(AccountException::VALIDATION, 'The two passwords do not match.');
+        }
+
+        $this->assertEmailFree($clean['email']);
+        $this->assertUsernameFree($clean['username']);
+
+        return $clean;
     }
 
     /**

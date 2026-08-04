@@ -1,0 +1,44 @@
+# =====================================================================
+#  Uploaded photos — data, never code.
+# =====================================================================
+#
+#  A photo is accepted on what its bytes say it is, and saved under a
+#  name this application generates, so a ".php" cannot arrive by way of
+#  the filename. This file is the second lock: even if something did get
+#  in here, the server must refuse to run it.
+
+# Apache 2.4 with mod_php or any handler-based PHP.
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+
+# suPHP / FastCGI / LiteSpeed — cPanel usually runs one of these, where
+# php_flag is unavailable and the handler has to be stripped instead.
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phps
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phps
+AddType text/plain .php .phtml .php3 .php4 .php5 .php7 .php8 .phps
+
+# Nothing here is ever a directory index or a CGI program.
+Options -ExecCGI -Indexes
+
+# Serve only what we put here on purpose.
+<FilesMatch "\.(?i:jpe?g|png|webp|gif)$">
+    <IfModule mod_authz_core.c>
+        Require all granted
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Allow from all
+    </IfModule>
+</FilesMatch>
+
+<FilesMatch "^(?!.*\.(?i:jpe?g|png|webp|gif)$).*$">
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Deny from all
+    </IfModule>
+</FilesMatch>

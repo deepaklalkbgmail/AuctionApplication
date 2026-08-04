@@ -39,10 +39,19 @@ DELETE FROM `match_squads`;
 DELETE FROM `matches`;
 DELETE FROM `auction_bids`;
 DELETE FROM `auction_lots`;
+DELETE FROM `tournament_registrations`;
 
--- users and players both point at teams, so they go before teams -------
-DELETE FROM `users`;
+-- players point at users, so players go first --------------------------
 DELETE FROM `players`;
+
+-- users.approved_by points at users. InnoDB checks a foreign key row by
+-- row, so "delete every user" can still trip over an administrator who is
+-- named as somebody's approver. Clearing the column first removes the
+-- reference, and the audit trail it recorded is about to be deleted too.
+UPDATE `users` SET `approved_by` = NULL;
+DELETE FROM `users`;
+
+-- users and players both pointed at teams, so teams go after both ------
 DELETE FROM `teams`;
 DELETE FROM `tournaments`;
 
@@ -53,6 +62,7 @@ ALTER TABLE `match_squads`  AUTO_INCREMENT = 1;
 ALTER TABLE `matches`       AUTO_INCREMENT = 1;
 ALTER TABLE `auction_bids`  AUTO_INCREMENT = 1;
 ALTER TABLE `auction_lots`  AUTO_INCREMENT = 1;
+ALTER TABLE `tournament_registrations` AUTO_INCREMENT = 1;
 ALTER TABLE `users`         AUTO_INCREMENT = 1;
 ALTER TABLE `players`       AUTO_INCREMENT = 1;
 ALTER TABLE `teams`         AUTO_INCREMENT = 1;
@@ -61,6 +71,7 @@ ALTER TABLE `tournaments`   AUTO_INCREMENT = 1;
 -- ---------------------------------------------------------------------
 --  One administrator, so you can sign in.
 --
+--  Username:            admin
 --  Temporary password:  ChangeMe@2026
 --
 --  CHANGE IT IMMEDIATELY. This password is published in the project
@@ -69,9 +80,18 @@ ALTER TABLE `tournaments`   AUTO_INCREMENT = 1;
 --  "Changing a password", has the two-step procedure.
 --
 --  Edit the name and email below before running this.
+--  Sign in with either the username or the email address.
+--
+--  must_change_password is set, so the first sign-in goes straight to the
+--  change-password screen and this published password cannot survive it.
 -- ---------------------------------------------------------------------
-INSERT INTO `users` (`name`, `email`, `password_hash`, `role`) VALUES
-    ('Administrator',
+INSERT INTO `users`
+    (`username`, `name`, `email`, `password_hash`, `role`, `status`, `must_change_password`)
+VALUES
+    ('admin',
+     'Administrator',
      'admin@example.com',
      '$2y$12$6tzGcvAhLivGnGxDN1nELOu6jqFLXZvbaKS3b8Ali.H1jaUpztVhK',
-     'admin');
+     'admin',
+     'approved',
+     1);

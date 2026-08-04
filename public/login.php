@@ -34,7 +34,11 @@ if (Auth::check()) {
     exit;
 }
 
-$error = null;
+// Auth::require() sends people here when their account stopped being
+// usable while they were signed in.
+$error = isset($_GET['ended'])
+    ? 'Your session has ended. Sign in again, or contact the organisers if this keeps happening.'
+    : null;
 
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!Security::verifyCsrf($_POST['csrf_token'] ?? null)) {
