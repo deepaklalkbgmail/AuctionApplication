@@ -40,6 +40,9 @@ $error = isset($_GET['ended'])
     ? 'Your session has ended. Sign in again, or contact the organisers if this keeps happening.'
     : null;
 
+// A sign-out that says nothing looks like a sign-out that did not work.
+$notice = isset($_GET['signedout']) ? 'You have been signed out.' : null;
+
 if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!Security::verifyCsrf($_POST['csrf_token'] ?? null)) {
         $error = 'Your session expired. Please try again.';
@@ -92,6 +95,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             <?php if ($error !== null): ?>
                 <p role="alert" class="rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-[13px] font-semibold text-rose-200">
                     <?= e($error) ?>
+                </p>
+            <?php elseif ($notice !== null): ?>
+                <p role="status" class="rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-3.5 py-2.5 text-[13px] font-semibold text-emerald-200">
+                    <?= e($notice) ?>
                 </p>
             <?php endif; ?>
 

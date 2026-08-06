@@ -32,8 +32,12 @@ $role = Auth::check()
     ? Auth::role()
     : (in_array($_GET['role'] ?? '', $ALLOWED_ROLES, true) ? $_GET['role'] : Auth::ROLE_OWNER);
 
+// Signed out, nobody is named. The demonstration names that used to sit here
+// made a signed-out visitor look like a signed-in owner, which is exactly the
+// confusion a sign-out button exists to avoid. Locally, where the role
+// preview switcher is useful, keep the placeholder names.
 $viewer = Auth::user() ?? [
-    'name'    => match ($role) {
+    'name'    => IS_PRODUCTION ? 'Not signed in' : match ($role) {
         Auth::ROLE_ADMIN  => 'Arjun Mehta',
         Auth::ROLE_SCORER => 'Priya Nair',
         Auth::ROLE_VIEWER => 'Guest Viewer',
@@ -296,6 +300,26 @@ $bootstrap = Security::json([
                         </p>
                     </div>
                 </div>
+
+                <?php // An owner lives on this screen; without this there is no
+                      // way off it. POST, because logout.php refuses a GET. ?>
+                <?php if (Auth::check()): ?>
+                    <form method="post" action="logout.php" class="inline">
+                        <?= csrf_field() ?>
+                        <button type="submit" title="Sign out"
+                                class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] font-semibold text-slate-400 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-300">
+                            <span class="hidden sm:inline">Sign out</span>
+                            <svg viewBox="0 0 24 24" class="h-4 w-4 sm:hidden" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>
+                            </svg>
+                        </button>
+                    </form>
+                <?php else: ?>
+                    <a href="login.php"
+                       class="rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-[12px] font-semibold text-slate-300 transition hover:bg-white/10">
+                        Sign in
+                    </a>
+                <?php endif; ?>
             </div>
         </div>
     </header>

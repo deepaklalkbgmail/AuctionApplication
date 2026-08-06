@@ -43,7 +43,10 @@ $demo = require dirname(__DIR__) . '/database/demo_match.php';
 $match   = $demo['match'];
 $innings = $demo['innings'];
 
-$scorer = Auth::user() ?? ['name' => 'Priya Nair', 'role' => Auth::ROLE_SCORER];
+// Signed out, this is a spectator's scorecard — so name nobody. It used to
+// fall back to a demonstration scorer, which meant a signed-out visitor on a
+// clean installation was shown a stranger's name as if they were scoring.
+$scorer = Auth::user() ?? ['name' => 'Not signed in', 'role' => Auth::ROLE_VIEWER];
 
 // ---------------------------------------------------------------------
 //  Live mode
@@ -154,6 +157,21 @@ $bootstrap = Security::json([
             <span class="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 <?= e((string) $scorer['name']) ?>
             </span>
+            <?php // A scorer spends the whole match here. POST, because
+                  // logout.php refuses a GET. ?>
+            <?php if (Auth::check()): ?>
+                <form method="post" action="logout.php" class="inline shrink-0">
+                    <?= csrf_field() ?>
+                    <button type="submit" title="Sign out"
+                            class="rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-300">
+                        Out
+                    </button>
+                </form>
+            <?php else: ?>
+                <a href="login.php" class="shrink-0 rounded-lg border border-white/10 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400 transition hover:text-slate-200">
+                    Sign in
+                </a>
+            <?php endif; ?>
         </div>
 
         <div class="flex items-end gap-4">

@@ -827,6 +827,7 @@ the change-password screen. Change it, then edit the name and email under
 | An owner cannot rename their team | The team name change deadline has passed | An administrator can still rename it, under Administration → Teams |
 | **"Another team in this tournament is already called…"** | Names are unique within a tournament | Pick a different one; the same name in a different season is fine |
 | Signed in, but told "You do not own a team" | The team was assigned in another window | It refreshes on the next click; if not, sign out and in |
+| **Sign out appears to do nothing** — you land back on your own screen | An old copy of the application, where the header linked to `logout.php` with a plain link and the page ignored it | Upload the current `app/Views/layouts/shell.php`, `public/logout.php`, `public/login.php`, `public/auction.php` and `public/score.php` |
 | **"No auction is running" / "No match is being scored"** | The database is empty, or no lot is live and no innings is open | Expected on a clean install. Create a tournament (6.1), let players in (6.3) and open a lot (6.6), or set up a fixture (6.7) |
 | `#1701 Cannot truncate a table referenced in a foreign key constraint` | An old copy of `reset.sql` that used TRUNCATE | Use the current `reset.sql`; it uses DELETE and works with foreign key checks on |
 | Bid button greyed out | Leading, purse-blocked, or squad full | Hover for the reason; see 7.4 |

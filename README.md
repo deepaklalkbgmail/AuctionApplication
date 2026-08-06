@@ -47,6 +47,7 @@ a clean-install procedure and a demonstration script.
 | Shared page shell for the account screens | [`app/Views/layouts/shell.php`](app/Views/layouts/shell.php) |
 | Migration for an existing installation | [`database/migrations/001_accounts_and_registration.sql`](database/migrations/001_accounts_and_registration.sql) |
 | Integration tests (140 assertions) | [`tests/account_test.php`](tests/account_test.php) |
+| Sign-out, every role, over real HTTP (42 assertions) | [`tests/logout_test.php`](tests/logout_test.php) |
 
 **Phase 3 — the scorer's interface**
 

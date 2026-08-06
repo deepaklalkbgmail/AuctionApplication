@@ -101,7 +101,14 @@ function page_head(string $title, string $up = '', array $links = []): void
                         <?= e(str_replace('_', ' ', (string) $user['role'])) ?>
                     </span>
                 </span>
-                <a href="<?= e($up) ?>logout.php" class="text-[13px] font-semibold text-slate-400 hover:text-rose-300">Sign out</a>
+                <?php // A POST, because logout.php refuses a GET: any other site
+                      // could sign you out with an <img src="…/logout.php">. ?>
+                <form method="post" action="<?= e($up) ?>logout.php" class="inline">
+                    <?= csrf_field() ?>
+                    <button type="submit" class="text-[13px] font-semibold text-slate-400 transition hover:text-rose-300">
+                        Sign out
+                    </button>
+                </form>
             <?php else: ?>
                 <a href="<?= e($up) ?>login.php" class="text-[13px] font-semibold text-slate-300 hover:text-emerald-300">Sign in</a>
                 <a href="<?= e($up) ?>register.php"
