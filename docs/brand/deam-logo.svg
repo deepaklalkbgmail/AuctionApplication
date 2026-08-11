@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Deam Software Solutios — brand mark.
+
+    RECONSTRUCTION. This was rebuilt to match the supplied artwork, because
+    the original file was not available to the machine that generated the
+    guides. It is close, but it is not the master.
+
+    To use the real one: drop the original at docs/brand/deam-logo.png
+    (the generator prefers the PNG when it exists) or replace this file
+    keeping the name, then re-run:
+
+        node docs/build-guides.mjs
+
+    Note the gradients use gradientUnits="userSpaceOnUse". Every green
+    shape then samples one gradient across the whole canvas, so the mark
+    reads as a single object instead of showing a seam wherever two shapes
+    overlap.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" width="100%" height="100%">
+    <defs>
+        <linearGradient id="deamLeaf" gradientUnits="userSpaceOnUse"
+                        x1="80" y1="900" x2="760" y2="180">
+            <stop offset="0"    stop-color="#0a6b52"/>
+            <stop offset="0.42" stop-color="#2aa05c"/>
+            <stop offset="1"    stop-color="#6ecf3e"/>
+        </linearGradient>
+        <linearGradient id="deamSky" gradientUnits="userSpaceOnUse"
+                        x1="700" y1="880" x2="940" y2="380">
+            <stop offset="0"    stop-color="#124fa6"/>
+            <stop offset="0.55" stop-color="#1d77ca"/>
+            <stop offset="1"    stop-color="#3ab7e9"/>
+        </linearGradient>
+
+        <!-- The white counter is punched out rather than painted over, so
+             the mark keeps its hole on a coloured background too. -->
+        <mask id="deamCounter">
+            <rect width="1000" height="1000" fill="#fff"/>
+            <circle cx="455" cy="658" r="180" fill="#000"/>
+        </mask>
+    </defs>
+
+    <g mask="url(#deamCounter)" fill="url(#deamLeaf)">
+        <!-- Lower bowl -->
+        <circle cx="320" cy="640" r="264"/>
+        <!-- Upper lobe: domed on the left, straight stem edge on the right -->
+        <path d="
+            M 572 212
+            C 470 196 372 226 310 302
+            C 258 366 240 442 250 508
+            L 250 560
+            L 572 560
+            Z
+        "/>
+    </g>
+
+    <!-- Seed, sitting inside the counter -->
+    <ellipse cx="494" cy="714" rx="80" ry="106" fill="url(#deamLeaf)"/>
+
+    <!-- Blue bowl -->
+    <path d="M 688 372 A 250 250 0 0 1 688 872 Z" fill="url(#deamSky)"/>
+</svg>
