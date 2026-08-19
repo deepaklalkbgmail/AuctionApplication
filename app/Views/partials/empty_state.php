@@ -15,6 +15,9 @@ declare(strict_types=1);
  *   $emptyTitle   short heading
  *   $emptyBody    one or two sentences explaining what will fill this screen
  *   $emptyHint    optional extra line, e.g. what an administrator should do
+ *   $emptyAction  optional ['url', 'label', 'note'] — a POST button, so the
+ *                 person who can fix the emptiness can do it from here
+ *                 rather than being told to go and find another screen
  *
  * Include it and exit:
  *   require dirname(__DIR__, 2) . '/Views/partials/empty_state.php';
@@ -23,7 +26,8 @@ declare(strict_types=1);
 
 /** @var string $emptyTitle */
 /** @var string $emptyBody */
-$emptyHint ??= null;
+$emptyHint   ??= null;
+$emptyAction ??= null;
 
 ?>
 <!DOCTYPE html>
@@ -57,6 +61,19 @@ $emptyHint ??= null;
             <p class="mx-auto mt-4 max-w-sm rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-[12.5px] leading-relaxed text-slate-500">
                 <?= e($emptyHint) ?>
             </p>
+        <?php endif; ?>
+
+        <?php if ($emptyAction !== null): ?>
+            <form method="post" action="<?= e($emptyAction['url']) ?>" class="mt-7">
+                <?= csrf_field() ?>
+                <button type="submit"
+                        class="rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-7 py-3.5 text-[13px] font-black uppercase tracking-wide text-ink-900 shadow-lg shadow-emerald-500/25 transition hover:brightness-110">
+                    <?= e($emptyAction['label']) ?>
+                </button>
+                <?php if (!empty($emptyAction['note'])): ?>
+                    <p class="mt-2.5 text-[12px] text-slate-500"><?= e($emptyAction['note']) ?></p>
+                <?php endif; ?>
+            </form>
         <?php endif; ?>
 
         <div class="mt-8 flex flex-wrap justify-center gap-3">

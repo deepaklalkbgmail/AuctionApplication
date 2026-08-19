@@ -122,11 +122,31 @@ if (Database::isAvailable()) {
 // fallback stays for local development, where it is useful for UI work.
 if ($state === null) {
     if (IS_PRODUCTION) {
-        $emptyTitle = 'No auction is running';
-        $emptyBody  = 'When the tournament director puts the first player under the hammer, the live board appears here.';
-        $emptyHint  = Auth::is(Auth::ROLE_ADMIN)
-            ? 'As administrator: load a tournament, teams, players and their auction lots, then open the first lot. Section 4 of the User Guide has the steps.'
-            : null;
+        $emptyTitle  = 'No auction is running';
+        $emptyBody   = 'When the tournament director puts the first player under the hammer, the live board appears here.';
+        $emptyHint   = null;
+        $emptyAction = null;
+
+        // An administrator arriving here is the person who can end the
+        // emptiness, so give them the button rather than instructions for
+        // finding it. How many players are waiting decides what to say.
+        if (Auth::is(Auth::ROLE_ADMIN)) {
+            $queued = (int) Database::scalar(
+                "SELECT COUNT(*) FROM auction_lots WHERE tournament_id = :t AND status = 'queued'",
+                [':t' => $TOURNAMENT_ID]
+            );
+
+            if ($queued > 0) {
+                $emptyAction = [
+                    'url'   => 'auction-next.php',
+                    'label' => 'Open the first player',
+                    'note'  => $queued . ' player' . ($queued === 1 ? '' : 's') . ' queued for this auction.',
+                ];
+            } else {
+                $emptyHint = 'Nobody is queued yet. Approve players under Administration → Applications — '
+                           . 'approving an application is what creates their auction lot.';
+            }
+        }
 
         require dirname(__DIR__) . '/app/Views/partials/empty_state.php';
         exit;
@@ -325,6 +345,25 @@ $bootstrap = Security::json([
     </header>
 
     <main class="mx-auto max-w-[1600px] px-4 py-5 sm:px-6 lg:py-7">
+
+        <?php
+        // What auction-next.php has to say — "X is under the hammer", or why
+        // it refused. Shown once, then cleared.
+        $notice = $_SESSION['auction_notice'] ?? null;
+        unset($_SESSION['auction_notice']);
+
+        if (is_array($notice)):
+            $noticeClass = match ($notice['kind']) {
+                'success' => 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200',
+                'note'    => 'border-sky-400/30 bg-sky-500/10 text-sky-200',
+                default   => 'border-rose-400/30 bg-rose-500/10 text-rose-200',
+            };
+            ?>
+            <p role="status" class="mb-4 rounded-xl border px-4 py-3 text-[13px] font-semibold <?= $noticeClass ?>">
+                <?= e((string) $notice['message']) ?>
+            </p>
+        <?php endif; ?>
+
         <div class="grid grid-cols-1 gap-5 xl:grid-cols-12">
 
             <!-- =================== LEFT: THE HAMMER =================== -->
@@ -501,7 +540,15 @@ $bootstrap = Security::json([
                         <?php elseif ($role === Auth::ROLE_ADMIN): ?>
                             <div class="space-y-4">
                                 <p class="text-[11px] font-bold uppercase tracking-wider text-slate-400">Auctioneer controls</p>
-                                <div class="grid grid-cols-2 gap-2 lg:grid-cols-4">
+                                <div class="grid grid-cols-2 gap-2 lg:grid-cols-5">
+                                    <form method="post" action="auction-next.php" class="contents">
+                                        <?= csrf_field() ?>
+                                        <input type="hidden" name="tournament_id" value="<?= (int) $t['id'] ?>">
+                                        <button type="submit"
+                                                class="rounded-xl border border-sky-400/30 bg-sky-500/10 px-4 py-4 text-sm font-black uppercase tracking-wide text-sky-300 transition hover:bg-sky-500/20">
+                                            Next player
+                                        </button>
+                                    </form>
                                     <button type="button" @click="hammer('sold')"
                                             :disabled="!leader"
                                             class="rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-4 py-4 text-sm font-black uppercase tracking-wide text-ink-900 shadow-lg shadow-emerald-500/25 transition enabled:hover:brightness-110 disabled:cursor-not-allowed disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-500 disabled:shadow-none">

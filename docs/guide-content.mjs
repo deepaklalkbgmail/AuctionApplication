@@ -1046,9 +1046,29 @@ stays in use.</p>`,
         {
             title: 'Running the auction',
             body: `
-<p>Open the auction board. Your controls sit under the player card.</p>
+<h3>Starting it</h3>
+
+<p>Nothing is under the hammer until you put it there. Open the auction
+board — <strong>Run the auction</strong> from the hub, or the
+<strong>Auction</strong> tab.</p>
+
+<p>Before the first lot the board reads <strong>No auction is running</strong>,
+with a single button: <strong>Open the first player</strong>. It tells you how
+many are queued. Press it, and the first player is live with the countdown
+running.</p>
+
+${callout('warn', 'If the button is not there',
+`It appears only when players are actually queued. If instead you are told nobody
+is queued, no application has been approved yet — and approving an application is
+what creates a player's auction lot. Go to
+<strong>Administration → Applications</strong> first.`)}
+
+<h3>The controls</h3>
+
+<p>Once a lot is live, your controls sit under the player card.</p>
 
 ${table(['Button', 'Does', 'When'], [
+    ['<strong>Next player</strong>', 'Puts the next queued player under the hammer', 'The previous lot has been closed'],
     ['<strong>Sold</strong>', 'Awards the player to the leading team and debits the purse', 'Bidding has stopped and someone leads'],
     ['<strong>Unsold</strong>', 'Closes the lot with no winner; the player returns to the pool', 'The countdown expired with no bid'],
     ['<strong>Pause</strong>', 'Freezes the countdown', 'A dispute, or a break'],
@@ -1061,9 +1081,18 @@ ${steps([
     'The next player appears with base price, role and career record.',
     'Owners bid. Each bid restarts the countdown, so the room decides when bidding is over — not the clock.',
     'The countdown reaches zero, or the room goes quiet.',
-    'Press <strong>Sold</strong>. Every screen updates immediately.',
-    'The next player comes up.',
+    'Press <strong>Sold</strong> — or <strong>Unsold</strong> if nobody bid. Every screen updates immediately.',
+    'Press <strong>Next player</strong> to open the following lot, and go round again.',
 ])}
+
+${callout('note', 'One press per lot, deliberately',
+`The next player does not come up by itself. An auction has a rhythm the room
+sets — a sale gets a reaction, somebody asks a question, an owner wants a moment
+to count. You decide when the next name goes up.
+<br><br>
+Pressing <strong>Next player</strong> while a lot is still open is refused, with
+“Close the current lot before starting the next one.” Nothing is skipped by a
+double-press.`)}
 
 ${callout('stop', 'Sold is final',
 `There is no undo on a sale. The lot closes, the player joins the squad and the money moves
