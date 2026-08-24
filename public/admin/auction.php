@@ -81,10 +81,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     );
 
                     flash('success', sprintf(
-                        'SOLD — %s to %s for ₹%s.',
+                        'SOLD — %s to %s for %s.',
                         $result['player'],
                         $result['team'],
-                        number_format((float) $result['price'])
+                        rupees($result['price'])
                     ));
 
                     if ($result['warning'] !== null) {
@@ -100,9 +100,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 case 'undo':
                     $result = $auction->undoSale((int) ($_POST['lot_id'] ?? 0), $adminId);
                     flash('success', sprintf(
-                        'Undone — %s is back in the pool and ₹%s returned to %s.',
+                        'Undone — %s is back in the pool and %s returned to %s.',
                         $result['player'],
-                        number_format((float) $result['refunded']),
+                        rupees($result['refunded']),
                         $result['team']
                     ));
                     break;
