@@ -1,16 +1,18 @@
--- =====================================================================
---  APL — demonstration dataset
---
---  A complete, coherent tournament for showing the application: six
---  franchises, a 60-player pool, an auction part way through with a
---  player under the hammer, and a match ready to be scored from the
---  first ball.
---
---  Load database/reset.sql FIRST — this file assumes empty tables.
---
---  Every account here uses the password  ChangeMe@2026
---  This is demonstration data. Run reset.sql again before real use.
--- =====================================================================
+/*
+   =====================================================================
+   APL — demonstration dataset
+
+   A complete, coherent tournament for showing the application: six
+   franchises, a 60-player pool, an auction part way through with a
+   player under the hammer, and a match ready to be scored from the
+   first ball.
+
+   Load database/reset.sql FIRST — this file assumes empty tables.
+
+   Every account here uses the password  ChangeMe@2026
+   This is demonstration data. Run reset.sql again before real use.
+   =====================================================================
+*/
 
 INSERT INTO `tournaments` (`id`,`name`,`season_year`,`secret_code`,`auction_date`,`start_date`,`end_date`,`team_name_change_deadline`,`registration_open`,`purse_per_team`,`min_squad_size`,`max_squad_size`,`max_overseas`,`bid_increment`,`bid_timer_seconds`,`overs_per_innings`,`balls_per_over`,`status`) VALUES
   (1, 'APL', 2026, 'BATSMAN7', CURDATE(), DATE_ADD(CURDATE(), INTERVAL 14 DAY), DATE_ADD(CURDATE(), INTERVAL 60 DAY), DATE_ADD(CURDATE(), INTERVAL 7 DAY), 1, 50000000.00, 11, 15, 4, 500000.00, 30, 20, 6, 'auction');
@@ -158,14 +160,14 @@ INSERT INTO `auction_lots` (`tournament_id`,`player_id`,`lot_order`,`status`,`ba
   (1,58,59,'queued',200000.00,NULL,NULL,0,NULL,NULL,NULL,NULL,NULL),
   (1,59,60,'queued',200000.00,NULL,NULL,0,NULL,NULL,NULL,NULL,NULL);
 
--- Bid ladder on the live lot: three teams, on the ₹5 L increment grid.
+/* Bid ladder on the live lot: three teams, on the ₹5 L increment grid. */
 SET @live_lot := (SELECT id FROM auction_lots WHERE player_id = 11);
 INSERT INTO `auction_bids` (`lot_id`,`player_id`,`team_id`,`bid_amount`,`placed_at`) VALUES
   (@live_lot,11,3,1500000.00,NOW() - INTERVAL 46 SECOND),
   (@live_lot,11,5,2000000.00,NOW() - INTERVAL 28 SECOND),
   (@live_lot,11,3,2500000.00,NOW() - INTERVAL  6 SECOND);
 
--- A fixture between the two completed squads, ready to score from ball 1.
+/* A fixture between the two completed squads, ready to score from ball 1. */
 INSERT INTO `matches` (`id`,`tournament_id`,`match_number`,`stage`,`team_a_id`,`team_b_id`,`venue`,`scheduled_at`,`overs_per_innings`,`toss_winner_team_id`,`toss_decision`,`status`,`scorer_user_id`) VALUES
   (1, 1, 1, 'league', 1, 2, 'Marine Drive Ground', NOW(), 20, 1, 'bat', 'live', (SELECT id FROM users WHERE email = 'scorer@apl.local'));
 

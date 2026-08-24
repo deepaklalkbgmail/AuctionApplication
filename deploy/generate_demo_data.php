@@ -124,19 +124,25 @@ foreach ($pool as $pid => $p) {
 
 // ---- emit ------------------------------------------------------------------
 $o = [];
-$o[] = "-- =====================================================================";
-$o[] = "--  APL — demonstration dataset";
-$o[] = "--";
-$o[] = "--  A complete, coherent tournament for showing the application: six";
-$o[] = "--  franchises, a {$total}-player pool, an auction part way through with a";
-$o[] = "--  player under the hammer, and a match ready to be scored from the";
-$o[] = "--  first ball.";
-$o[] = "--";
-$o[] = "--  Load database/reset.sql FIRST — this file assumes empty tables.";
-$o[] = "--";
-$o[] = "--  Every account here uses the password  ChangeMe@2026";
-$o[] = "--  This is demonstration data. Run reset.sql again before real use.";
-$o[] = "-- =====================================================================";
+// Block comments, not "--" line comments. A "--" runs to the end of its
+// line, so pasting this file into a box that joins lines would let the
+// first comment swallow every statement after it. A /* */ block ends
+// where it says it ends, whatever happens to the newlines.
+$o[] = "/*";
+$o[] = "   =====================================================================";
+$o[] = "   APL — demonstration dataset";
+$o[] = "";
+$o[] = "   A complete, coherent tournament for showing the application: six";
+$o[] = "   franchises, a {$total}-player pool, an auction part way through with a";
+$o[] = "   player under the hammer, and a match ready to be scored from the";
+$o[] = "   first ball.";
+$o[] = "";
+$o[] = "   Load database/reset.sql FIRST — this file assumes empty tables.";
+$o[] = "";
+$o[] = "   Every account here uses the password  ChangeMe@2026";
+$o[] = "   This is demonstration data. Run reset.sql again before real use.";
+$o[] = "   =====================================================================";
+$o[] = "*/";
 $o[] = "";
 // The four dates are written relative to the day the file is imported, so a
 // demonstration never opens on a season that finished last year. The auction
@@ -195,14 +201,14 @@ foreach ($queued as $qd) {
 }
 $o[] = implode(",\n", $rows) . ";";
 $o[] = "";
-$o[] = "-- Bid ladder on the live lot: three teams, on the ₹5 L increment grid.";
+$o[] = "/* Bid ladder on the live lot: three teams, on the ₹5 L increment grid. */";
 $o[] = "SET @live_lot := (SELECT id FROM auction_lots WHERE player_id = {$liveId});";
 $o[] = "INSERT INTO `auction_bids` (`lot_id`,`player_id`,`team_id`,`bid_amount`,`placed_at`) VALUES";
 $o[] = sprintf("  (@live_lot,%d,3,%0.2f,NOW() - INTERVAL 46 SECOND),", $liveId, $liveBase);
 $o[] = sprintf("  (@live_lot,%d,5,%0.2f,NOW() - INTERVAL 28 SECOND),", $liveId, $liveBase + 500000);
 $o[] = sprintf("  (@live_lot,%d,3,%0.2f,NOW() - INTERVAL  6 SECOND);", $liveId, $liveBase + 1000000);
 $o[] = "";
-$o[] = "-- A fixture between the two completed squads, ready to score from ball 1.";
+$o[] = "/* A fixture between the two completed squads, ready to score from ball 1. */";
 $o[] = "INSERT INTO `matches` (`id`,`tournament_id`,`match_number`,`stage`,`team_a_id`,`team_b_id`,`venue`,`scheduled_at`,`overs_per_innings`,`toss_winner_team_id`,`toss_decision`,`status`,`scorer_user_id`) VALUES";
 $o[] = "  (1, 1, 1, 'league', 1, 2, 'Marine Drive Ground', NOW(), 20, 1, 'bat', 'live', (SELECT id FROM users WHERE email = 'scorer@apl.local'));";
 $o[] = "";

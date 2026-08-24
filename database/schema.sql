@@ -1,42 +1,46 @@
--- =====================================================================
---  CricAuction — Cricket Auction & Live Scoring Platform
---  Schema for MySQL 8.0.16+  (CHECK constraints and generated columns
---  are enforced from 8.0.16 onward)
---
---  Conventions
---    * InnoDB + utf8mb4_unicode_ci everywhere (emoji-safe team names)
---    * Money stored as DECIMAL(14,2) — never FLOAT
---    * Every FK is named fk_<table>_<column> for readable error messages
---    * ON DELETE RESTRICT by default; CASCADE only where the child row is
---      meaningless without its parent (bids, balls, squads)
---    * A foreign key whose column also appears in a CHECK constraint carries
---      NO referential action at all — both MySQL 8 and MariaDB reject that
---      combination outright (ERROR 1901), because a cascade could silently
---      drive the row through its own CHECK. Those FKs fall back to the
---      default NO ACTION, which is what we want anyway: you should not be
---      able to delete a team out from under its owner or its sold players.
---
---  Load order matters (FK dependencies):
---    tournaments -> teams -> users -> players -> auction_lots ->
---    auction_bids -> matches -> match_squads -> innings -> ball_by_ball
--- =====================================================================
+/*
+   =====================================================================
+   CricAuction — Cricket Auction & Live Scoring Platform
+   Schema for MySQL 8.0.16+  (CHECK constraints and generated columns
+   are enforced from 8.0.16 onward)
 
--- ---------------------------------------------------------------------
---  SHARED HOSTING (cPanel / Plesk): DELETE the next two statements.
---
---  cPanel creates the database for you and prefixes its name
---  (deamco_APL), and the MySQL user it issues has no
---  CREATE DATABASE privilege — so both statements will fail. Create the
---  database in cPanel first, then import the rest of this file into it.
---
---      deploy/strip-create-database.sh   does this for you.
--- ---------------------------------------------------------------------
+   Conventions
+   * InnoDB + utf8mb4_unicode_ci everywhere (emoji-safe team names)
+   * Money stored as DECIMAL(14,2) — never FLOAT
+   * Every FK is named fk_<table>_<column> for readable error messages
+   * ON DELETE RESTRICT by default; CASCADE only where the child row is
+   meaningless without its parent (bids, balls, squads)
+   * A foreign key whose column also appears in a CHECK constraint carries
+   NO referential action at all — both MySQL 8 and MariaDB reject that
+   combination outright (ERROR 1901), because a cascade could silently
+   drive the row through its own CHECK. Those FKs fall back to the
+   default NO ACTION, which is what we want anyway: you should not be
+   able to delete a team out from under its owner or its sold players.
+
+   Load order matters (FK dependencies):
+   tournaments -> teams -> users -> players -> auction_lots ->
+   auction_bids -> matches -> match_squads -> innings -> ball_by_ball
+   =====================================================================
+*/
+
+/*
+   ---------------------------------------------------------------------
+   SHARED HOSTING (cPanel / Plesk): DELETE the next two statements.
+
+   cPanel creates the database for you and prefixes its name
+   (deamco_APL), and the MySQL user it issues has no
+   CREATE DATABASE privilege — so both statements will fail. Create the
+   database in cPanel first, then import the rest of this file into it.
+
+   deploy/strip-create-database.sh   does this for you.
+   ---------------------------------------------------------------------
+*/
 CREATE DATABASE IF NOT EXISTS `cric_auction`
     DEFAULT CHARACTER SET utf8mb4
     DEFAULT COLLATE utf8mb4_unicode_ci;
 
 USE `cric_auction`;
--- --------------------------- end of the shared-hosting cut ------------
+/* --------------------------- end of the shared-hosting cut ------------ */
 
 SET FOREIGN_KEY_CHECKS = 0;
 DROP TABLE IF EXISTS `ball_by_ball`;
@@ -53,31 +57,39 @@ DROP TABLE IF EXISTS `tournaments`;
 SET FOREIGN_KEY_CHECKS = 1;
 
 
--- ---------------------------------------------------------------------
--- tournaments — the scoping root. Teams, players, auctions and matches
--- all belong to exactly one tournament, so multiple seasons can coexist.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   tournaments — the scoping root. Teams, players, auctions and matches
+   all belong to exactly one tournament, so multiple seasons can coexist.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `tournaments` (
     `id`                 INT UNSIGNED    NOT NULL AUTO_INCREMENT,
     `name`               VARCHAR(120)    NOT NULL,
     `season_year`        SMALLINT UNSIGNED NOT NULL,
     `logo_url`           VARCHAR(255)        NULL,
 
-    -- The code players join with. Generated from an alphabet that excludes
-    -- 0/O/o and 1/I/l/i, so it survives being read out in a crowded room.
+/*
+   The code players join with. Generated from an alphabet that excludes
+   0/O/o and 1/I/l/i, so it survives being read out in a crowded room.
+*/
     `secret_code`        VARCHAR(16)         NULL,
 
-    -- The season's four dates. Nullable so a tournament can be sketched out
-    -- before the calendar is settled.
+/*
+   The season's four dates. Nullable so a tournament can be sketched out
+   before the calendar is settled.
+*/
     `start_date`         DATE                NULL,
-    `auction_date`       DATE                NULL,   -- entries close at end of day
+    `auction_date`       DATE                NULL,  /* entries close at end of day */
     `end_date`           DATE                NULL,
-    -- The last day an owner may rename their own team. After it, only an
-    -- administrator can.
+/*
+   The last day an owner may rename their own team. After it, only an
+   administrator can.
+*/
     `team_name_change_deadline` DATE          NULL,
     `registration_open`  TINYINT(1)      NOT NULL DEFAULT 1,
 
-    -- Auction rules
+/* Auction rules */
     `purse_per_team`     DECIMAL(14,2)   NOT NULL DEFAULT 10000000.00,
     `min_squad_size`     TINYINT UNSIGNED NOT NULL DEFAULT 11,
     `max_squad_size`     TINYINT UNSIGNED NOT NULL DEFAULT 15,
@@ -85,7 +97,7 @@ CREATE TABLE `tournaments` (
     `bid_increment`      DECIMAL(14,2)   NOT NULL DEFAULT 500000.00,
     `bid_timer_seconds`  SMALLINT UNSIGNED NOT NULL DEFAULT 30,
 
-    -- Match rules
+/* Match rules */
     `overs_per_innings`  TINYINT UNSIGNED NOT NULL DEFAULT 20,
     `balls_per_over`     TINYINT UNSIGNED NOT NULL DEFAULT 6,
 
@@ -104,19 +116,21 @@ CREATE TABLE `tournaments` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- teams — franchises bidding in the auction.
--- purse_remaining is a GENERATED column so "money left" can never drift
--- out of sync with what has been spent; the CHECK makes overspending a
--- database-level error, not just an application-level one.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   teams — franchises bidding in the auction.
+   purse_remaining is a GENERATED column so "money left" can never drift
+   out of sync with what has been spent; the CHECK makes overspending a
+   database-level error, not just an application-level one.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `teams` (
     `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `tournament_id`  INT UNSIGNED  NOT NULL,
     `name`           VARCHAR(100)  NOT NULL,
-    `short_name`     VARCHAR(6)    NOT NULL,           -- 'MI', 'CSK'
+    `short_name`     VARCHAR(6)    NOT NULL,  /* 'MI', 'CSK' */
     `logo_url`       VARCHAR(255)      NULL,
-    `primary_color`  CHAR(7)       NOT NULL DEFAULT '#22c55e',  -- hex, drives the UI accent
+    `primary_color`  CHAR(7)       NOT NULL DEFAULT '#22c55e',  /* hex, drives the UI accent */
     `home_venue`     VARCHAR(120)      NULL,
 
     `purse_total`    DECIMAL(14,2) NOT NULL DEFAULT 10000000.00,
@@ -142,36 +156,40 @@ CREATE TABLE `teams` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- users — a person, not just a login. Five roles: a team_owner is linked
--- to exactly one team; admins / scorers / viewers / players have team_id
--- NULL. Passwords are bcrypt hashes from password_hash(), never plaintext.
---
--- A 'player' is someone who registered themselves and wants to be
--- auctioned. They arrive as 'pending' and reach no auction until an
--- administrator approves them.
---
--- name and email are set once, at registration, and only an administrator
--- may change them afterwards — they are what the administrator approved.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   users — a person, not just a login. Five roles: a team_owner is linked
+   to exactly one team; admins / scorers / viewers / players have team_id
+   NULL. Passwords are bcrypt hashes from password_hash(), never plaintext.
+
+   A 'player' is someone who registered themselves and wants to be
+   auctioned. They arrive as 'pending' and reach no auction until an
+   administrator approves them.
+
+   name and email are set once, at registration, and only an administrator
+   may change them afterwards — they are what the administrator approved.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `users` (
     `id`             INT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `username`       VARCHAR(40)      NULL,            -- sign in with this or the email
+    `username`       VARCHAR(40)      NULL,  /* sign in with this or the email */
     `name`           VARCHAR(120) NOT NULL,
-    `email`          VARCHAR(190) NOT NULL,            -- 190 keeps the index under utf8mb4 limits
+    `email`          VARCHAR(190) NOT NULL,  /* 190 keeps the index under utf8mb4 limits */
     `phone`          VARCHAR(20)      NULL,
     `address`        VARCHAR(255)     NULL,
-    `photo_path`     VARCHAR(255)     NULL,            -- relative to public/
+    `photo_path`     VARCHAR(255)     NULL,  /* relative to public/ */
     `player_type`    ENUM('batsman','bowler','all_rounder','wicket_keeper') NULL,
     `password_hash`  VARCHAR(255) NOT NULL,
-    -- Set when an administrator issues or resets a password; cleared as
-    -- soon as the person chooses their own.
+/*
+   Set when an administrator issues or resets a password; cleared as
+   soon as the person chooses their own.
+*/
     `must_change_password` TINYINT(1) NOT NULL DEFAULT 0,
     `role`           ENUM('admin','team_owner','scorer','viewer','player') NOT NULL DEFAULT 'viewer',
     `status`         ENUM('pending','approved','rejected','suspended') NOT NULL DEFAULT 'approved',
     `approved_by`    INT UNSIGNED     NULL,
     `approved_at`    DATETIME         NULL,
-    `team_id`        INT UNSIGNED     NULL,            -- required for team_owner, NULL otherwise
+    `team_id`        INT UNSIGNED     NULL,  /* required for team_owner, NULL otherwise */
     `avatar_url`     VARCHAR(255)     NULL,
     `is_active`      TINYINT(1)   NOT NULL DEFAULT 1,
     `last_login_at`  DATETIME         NULL,
@@ -181,9 +199,11 @@ CREATE TABLE `users` (
     PRIMARY KEY (`id`),
     UNIQUE KEY `uq_users_email` (`email`),
     UNIQUE KEY `uq_users_username` (`username`),
-    -- One owner per team. team_id is NULL for everyone who is not an owner,
-    -- and a unique index permits any number of NULLs — so this says exactly
-    -- "no two owners may hold the same team", and nothing more.
+/*
+   One owner per team. team_id is NULL for everyone who is not an owner,
+   and a unique index permits any number of NULLs — so this says exactly
+   "no two owners may hold the same team", and nothing more.
+*/
     UNIQUE KEY `uq_users_owner_team` (`team_id`),
     KEY `idx_users_role` (`role`, `is_active`),
     KEY `idx_users_status` (`status`, `role`),
@@ -193,7 +213,7 @@ CREATE TABLE `users` (
     CONSTRAINT `fk_users_approved_by`
         FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
 
-    -- A team owner must have a team; nobody else may have one.
+/* A team owner must have a team; nobody else may have one. */
     CONSTRAINT `chk_users_team_role` CHECK (
         (`role` = 'team_owner' AND `team_id` IS NOT NULL)
         OR (`role` <> 'team_owner' AND `team_id` IS NULL)
@@ -201,14 +221,16 @@ CREATE TABLE `users` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- tournament_registrations — the application, and the decision on it.
---
--- A player applies with the tournament's secret code; an administrator
--- approves or rejects. Approval is what creates the players row and the
--- auction lot, so this table is the audit trail for who let each player
--- into the auction, and when.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   tournament_registrations — the application, and the decision on it.
+
+   A player applies with the tournament's secret code; an administrator
+   approves or rejects. Approval is what creates the players row and the
+   auction lot, so this table is the audit trail for who let each player
+   into the auction, and when.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `tournament_registrations` (
     `id`            INT UNSIGNED NOT NULL AUTO_INCREMENT,
     `tournament_id` INT UNSIGNED NOT NULL,
@@ -220,7 +242,7 @@ CREATE TABLE `tournament_registrations` (
     `note`          VARCHAR(255)     NULL,
 
     PRIMARY KEY (`id`),
-    -- One application per person per tournament. Re-applying reuses the row.
+/* One application per person per tournament. Re-applying reuses the row. */
     UNIQUE KEY `uq_registration` (`tournament_id`, `user_id`),
     KEY `idx_registration_queue` (`tournament_id`, `status`),
 
@@ -235,19 +257,23 @@ CREATE TABLE `tournament_registrations` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- players — the auction pool. team_id / sold_price stay NULL until the
--- hammer falls; they are the denormalised "current owner" for fast reads,
--- while auction_lots keeps the authoritative sale record.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   players — the auction pool. team_id / sold_price stay NULL until the
+   hammer falls; they are the denormalised "current owner" for fast reads,
+   while auction_lots keeps the authoritative sale record.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `players` (
     `id`             INT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `tournament_id`  INT UNSIGNED  NOT NULL,
-    -- The account that registered. Nullable: an administrator can still
-    -- enter a player who has no login of their own.
+/*
+   The account that registered. Nullable: an administrator can still
+   enter a player who has no login of their own.
+*/
     `user_id`        INT UNSIGNED      NULL,
     `full_name`      VARCHAR(120)  NOT NULL,
-    `display_name`   VARCHAR(60)       NULL,           -- short name for the scorecard
+    `display_name`   VARCHAR(60)       NULL,  /* short name for the scorecard */
     `photo_url`      VARCHAR(255)      NULL,
     `country`        VARCHAR(60)   NOT NULL DEFAULT 'India',
     `date_of_birth`  DATE              NULL,
@@ -260,17 +286,17 @@ CREATE TABLE `players` (
 
     `is_overseas`    TINYINT(1)    NOT NULL DEFAULT 0,
     `is_capped`      TINYINT(1)    NOT NULL DEFAULT 0,
-    `auction_set`    VARCHAR(40)       NULL,           -- 'Marquee', 'Set A', …
+    `auction_set`    VARCHAR(40)       NULL,  /* 'Marquee', 'Set A', … */
     `base_price`     DECIMAL(14,2) NOT NULL DEFAULT 200000.00,
 
-    -- Career form shown on the auction card
+/* Career form shown on the auction card */
     `career_matches` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `career_runs`    MEDIUMINT UNSIGNED NOT NULL DEFAULT 0,
     `career_wickets` SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `strike_rate`    DECIMAL(6,2)  NOT NULL DEFAULT 0.00,
     `economy`        DECIMAL(5,2)  NOT NULL DEFAULT 0.00,
 
-    -- Auction outcome
+/* Auction outcome */
     `status`         ENUM('available','in_auction','sold','unsold','withdrawn')
                      NOT NULL DEFAULT 'available',
     `team_id`        INT UNSIGNED      NULL,
@@ -285,7 +311,7 @@ CREATE TABLE `players` (
     KEY `idx_players_team`   (`team_id`),
     KEY `idx_players_set`    (`tournament_id`, `auction_set`),
     UNIQUE KEY `uq_player_jersey` (`team_id`, `jersey_number`),
-    -- One account appears at most once per tournament.
+/* One account appears at most once per tournament. */
     UNIQUE KEY `uq_player_user_tournament` (`tournament_id`, `user_id`),
 
     CONSTRAINT `fk_players_tournament`
@@ -297,7 +323,7 @@ CREATE TABLE `players` (
         FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
 
     CONSTRAINT `chk_player_base_price` CHECK (`base_price` > 0),
-    -- A sold player must have both a team and a price >= base price.
+/* A sold player must have both a team and a price >= base price. */
     CONSTRAINT `chk_player_sold` CHECK (
         (`status` = 'sold' AND `team_id` IS NOT NULL AND `sold_price` >= `base_price`)
         OR (`status` <> 'sold' AND `sold_price` IS NULL)
@@ -305,12 +331,14 @@ CREATE TABLE `players` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- auction_lots — one row per player put under the hammer. This is the
--- live-state table the auction dashboard polls: exactly one lot per
--- tournament may be 'live' at a time (enforced in the service layer via
--- SELECT … FOR UPDATE).
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   auction_lots — one row per player put under the hammer. This is the
+   live-state table the auction dashboard polls: exactly one lot per
+   tournament may be 'live' at a time (enforced in the service layer via
+   SELECT … FOR UPDATE).
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `auction_lots` (
     `id`                    BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `tournament_id`         INT UNSIGNED  NOT NULL,
@@ -324,12 +352,12 @@ CREATE TABLE `auction_lots` (
     `bid_count`             SMALLINT UNSIGNED NOT NULL DEFAULT 0,
 
     `started_at`            DATETIME          NULL,
-    `ends_at`               DATETIME          NULL,     -- countdown target; extended on each bid
+    `ends_at`               DATETIME          NULL,  /* countdown target; extended on each bid */
     `closed_at`             DATETIME          NULL,
 
     `sold_to_team_id`       INT UNSIGNED      NULL,
     `sold_price`            DECIMAL(14,2)     NULL,
-    `closed_by_user_id`     INT UNSIGNED      NULL,     -- admin who hit Sold / Unsold
+    `closed_by_user_id`     INT UNSIGNED      NULL,  /* admin who hit Sold / Unsold */
 
     `created_at`            TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`            TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -363,23 +391,25 @@ CREATE TABLE `auction_lots` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- auction_bids — append-only bid log (audit trail + the live ticker).
--- Rows are never updated; the winning bid is flagged when the lot closes.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   auction_bids — append-only bid log (audit trail + the live ticker).
+   Rows are never updated; the winning bid is flagged when the lot closes.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `auction_bids` (
     `id`           BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `lot_id`       BIGINT UNSIGNED NOT NULL,
-    `player_id`    INT UNSIGNED    NOT NULL,     -- denormalised for player bid history
+    `player_id`    INT UNSIGNED    NOT NULL,  /* denormalised for player bid history */
     `team_id`      INT UNSIGNED    NOT NULL,
-    `user_id`      INT UNSIGNED        NULL,     -- owner who clicked (NULL = admin proxy bid)
+    `user_id`      INT UNSIGNED        NULL,  /* owner who clicked (NULL = admin proxy bid) */
     `bid_amount`   DECIMAL(14,2)   NOT NULL,
     `is_winning`   TINYINT(1)      NOT NULL DEFAULT 0,
-    `placed_at`    DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),  -- ms precision: bids race
-    `ip_address`   VARBINARY(16)       NULL,     -- INET6_ATON(), for dispute resolution
+    `placed_at`    DATETIME(3)     NOT NULL DEFAULT CURRENT_TIMESTAMP(3),  /* ms precision: bids race */
+    `ip_address`   VARBINARY(16)       NULL,  /* INET6_ATON(), for dispute resolution */
 
     PRIMARY KEY (`id`),
-    UNIQUE KEY `uq_bid_lot_amount` (`lot_id`, `bid_amount`),   -- no two teams at the same number
+    UNIQUE KEY `uq_bid_lot_amount` (`lot_id`, `bid_amount`),  /* no two teams at the same number */
     KEY `idx_bids_lot_time`   (`lot_id`, `placed_at` DESC),
     KEY `idx_bids_team`       (`team_id`, `placed_at` DESC),
     KEY `idx_bids_player`     (`player_id`),
@@ -401,9 +431,11 @@ CREATE TABLE `auction_bids` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- matches — schedule + toss + result.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   matches — schedule + toss + result.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `matches` (
     `id`                 INT UNSIGNED  NOT NULL AUTO_INCREMENT,
     `tournament_id`      INT UNSIGNED  NOT NULL,
@@ -422,10 +454,10 @@ CREATE TABLE `matches` (
 
     `status`             ENUM('scheduled','toss','live','innings_break','completed','abandoned')
                          NOT NULL DEFAULT 'scheduled',
-    `winner_team_id`     INT UNSIGNED      NULL,        -- NULL for tie / no result
-    `result_text`        VARCHAR(180)      NULL,        -- "MI won by 6 wickets"
+    `winner_team_id`     INT UNSIGNED      NULL,  /* NULL for tie / no result */
+    `result_text`        VARCHAR(180)      NULL,  /* "MI won by 6 wickets" */
     `player_of_match_id` INT UNSIGNED      NULL,
-    `scorer_user_id`     INT UNSIGNED      NULL,        -- assigned scorer
+    `scorer_user_id`     INT UNSIGNED      NULL,  /* assigned scorer */
 
     `created_at`         TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`         TIMESTAMP     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -463,10 +495,12 @@ CREATE TABLE `matches` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- match_squads — the playing XI per match. Guarantees a player can't be
--- listed twice in one match and that only one captain/keeper per side.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   match_squads — the playing XI per match. Guarantees a player can't be
+   listed twice in one match and that only one captain/keeper per side.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `match_squads` (
     `id`             BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `match_id`       INT UNSIGNED NOT NULL,
@@ -494,27 +528,29 @@ CREATE TABLE `match_squads` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- innings — running totals, maintained incrementally as balls arrive so
--- the live scorecard never has to aggregate the whole ball log.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   innings — running totals, maintained incrementally as balls arrive so
+   the live scorecard never has to aggregate the whole ball log.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `innings` (
     `id`               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `match_id`         INT UNSIGNED NOT NULL,
-    `innings_number`   TINYINT UNSIGNED NOT NULL,      -- 1 or 2 (3/4 reserved for super over)
+    `innings_number`   TINYINT UNSIGNED NOT NULL,  /* 1 or 2 (3/4 reserved for super over) */
     `batting_team_id`  INT UNSIGNED NOT NULL,
     `bowling_team_id`  INT UNSIGNED NOT NULL,
 
     `total_runs`       SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `total_wickets`    TINYINT UNSIGNED  NOT NULL DEFAULT 0,
-    `legal_balls`      SMALLINT UNSIGNED NOT NULL DEFAULT 0,   -- overs = legal_balls DIV 6
+    `legal_balls`      SMALLINT UNSIGNED NOT NULL DEFAULT 0,  /* overs = legal_balls DIV 6 */
     `extras_wide`      SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `extras_no_ball`   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `extras_bye`       SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `extras_leg_bye`   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
     `extras_penalty`   SMALLINT UNSIGNED NOT NULL DEFAULT 0,
 
-    `target`           SMALLINT UNSIGNED NULL,          -- set for the 2nd innings
+    `target`           SMALLINT UNSIGNED NULL,  /* set for the 2nd innings */
     `is_completed`     TINYINT(1) NOT NULL DEFAULT 0,
     `started_at`       DATETIME NULL,
     `ended_at`         DATETIME NULL,
@@ -536,22 +572,24 @@ CREATE TABLE `innings` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- ---------------------------------------------------------------------
--- ball_by_ball — the append-only event log. Every scorecard number in the
--- app is derivable from this table alone; `innings` is just a cache.
---
---   runs_scored = runs_off_bat + extra_runs
---   is_legal_delivery = 0 for wide / no-ball (they don't advance the over)
---   ball_sequence is a monotonic counter per innings, so an "Undo" in the
---   scorer pad is DELETE … ORDER BY ball_sequence DESC LIMIT 1.
--- ---------------------------------------------------------------------
+/*
+   ---------------------------------------------------------------------
+   ball_by_ball — the append-only event log. Every scorecard number in the
+   app is derivable from this table alone; `innings` is just a cache.
+
+   runs_scored = runs_off_bat + extra_runs
+   is_legal_delivery = 0 for wide / no-ball (they don't advance the over)
+   ball_sequence is a monotonic counter per innings, so an "Undo" in the
+   scorer pad is DELETE … ORDER BY ball_sequence DESC LIMIT 1.
+   ---------------------------------------------------------------------
+*/
 CREATE TABLE `ball_by_ball` (
     `id`               BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `match_id`         INT UNSIGNED    NOT NULL,
     `innings_id`       BIGINT UNSIGNED NOT NULL,
-    `ball_sequence`    SMALLINT UNSIGNED NOT NULL,     -- 1..n across the innings, incl. extras
-    `over_number`      TINYINT UNSIGNED  NOT NULL,     -- 0-based: over_number 0 = 1st over
-    `ball_in_over`     TINYINT UNSIGNED  NOT NULL,     -- 1..6 for legal deliveries
+    `ball_sequence`    SMALLINT UNSIGNED NOT NULL,  /* 1..n across the innings, incl. extras */
+    `over_number`      TINYINT UNSIGNED  NOT NULL,  /* 0-based: over_number 0 = 1st over */
+    `ball_in_over`     TINYINT UNSIGNED  NOT NULL,  /* 1..6 for legal deliveries */
 
     `striker_id`       INT UNSIGNED NOT NULL,
     `non_striker_id`   INT UNSIGNED NOT NULL,
@@ -579,8 +617,8 @@ CREATE TABLE `ball_by_ball` (
     UNIQUE KEY `uq_ball_sequence` (`innings_id`, `ball_sequence`),
     KEY `idx_ball_innings_over` (`innings_id`, `over_number`, `ball_in_over`),
     KEY `idx_ball_match`        (`match_id`),
-    KEY `idx_ball_striker`      (`innings_id`, `striker_id`),   -- batting card
-    KEY `idx_ball_bowler`       (`innings_id`, `bowler_id`),    -- bowling figures
+    KEY `idx_ball_striker`      (`innings_id`, `striker_id`),  /* batting card */
+    KEY `idx_ball_bowler`       (`innings_id`, `bowler_id`),  /* bowling figures */
 
     CONSTRAINT `fk_balls_match`
         FOREIGN KEY (`match_id`) REFERENCES `matches` (`id`)
@@ -610,7 +648,7 @@ CREATE TABLE `ball_by_ball` (
         (`is_wicket` = 1 AND `dismissal_type` IS NOT NULL AND `dismissed_player_id` IS NOT NULL)
         OR (`is_wicket` = 0 AND `dismissal_type` IS NULL AND `dismissed_player_id` IS NULL)
     ),
-    -- Wides and no-balls never count towards the over.
+/* Wides and no-balls never count towards the over. */
     CONSTRAINT `chk_ball_legality`  CHECK (
         (`extra_type` IN ('wide','no_ball') AND `is_legal_delivery` = 0)
         OR (`extra_type` NOT IN ('wide','no_ball') AND `is_legal_delivery` = 1)
@@ -618,11 +656,13 @@ CREATE TABLE `ball_by_ball` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 
--- =====================================================================
---  Read models — the dashboard queries these instead of hand-rolling joins
--- =====================================================================
+/*
+   =====================================================================
+   Read models — the dashboard queries these instead of hand-rolling joins
+   =====================================================================
+*/
 
--- Live auction state: one row per tournament currently under the hammer.
+/* Live auction state: one row per tournament currently under the hammer. */
 CREATE OR REPLACE VIEW `v_live_auction` AS
 SELECT  l.`id`                AS lot_id,
         l.`tournament_id`,
@@ -654,7 +694,7 @@ JOIN    `players` p ON p.`id` = l.`player_id`
 LEFT JOIN `teams` t ON t.`id` = l.`current_bidder_team_id`
 WHERE   l.`status` IN ('live','paused');
 
--- Batting card: derived purely from the ball log.
+/* Batting card: derived purely from the ball log. */
 CREATE OR REPLACE VIEW `v_batting_card` AS
 SELECT  b.`innings_id`,
         b.`striker_id`                                   AS player_id,
@@ -669,7 +709,7 @@ FROM    `ball_by_ball` b
 JOIN    `players` p ON p.`id` = b.`striker_id`
 GROUP BY b.`innings_id`, b.`striker_id`, p.`display_name`;
 
--- Bowling figures: overs, maidens excluded here (computed in the model).
+/* Bowling figures: overs, maidens excluded here (computed in the model). */
 CREATE OR REPLACE VIEW `v_bowling_card` AS
 SELECT  b.`innings_id`,
         b.`bowler_id`                                    AS player_id,
