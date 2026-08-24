@@ -122,6 +122,63 @@ if (Database::isAvailable()) {
 // fallback stays for local development, where it is useful for UI work.
 if ($state === null) {
     if (IS_PRODUCTION) {
+        // No lot is live. Under the manual method none ever is — the
+        // auction is called in the room and recorded afterwards — so
+        // "nothing to see" would be wrong for an auction that is well
+        // under way. If this tournament has lots at all, show the board:
+        // purses, what has sold, who is left.
+        // Wrapped, like the live-state read above it. A database that is
+        // reachable but half built — mid-import, or pointed at the wrong
+        // name — must still render a page saying so, not a 500.
+        $boardLots = 0;
+
+        try {
+            $boardLots = (int) Database::scalar(
+                'SELECT COUNT(*) FROM auction_lots WHERE tournament_id = :t',
+                [':t' => $TOURNAMENT_ID]
+            );
+        } catch (Throwable $e) {
+            error_log('[board] unavailable: ' . $e->getMessage());
+        }
+
+        if ($boardLots > 0) {
+            $boardTournament = Database::one(
+                'SELECT id, name, season_year FROM tournaments WHERE id = :t',
+                [':t' => $TOURNAMENT_ID]
+            );
+
+            $boardTeams = Database::all(
+                'SELECT id, name, short_name, primary_color, purse_total, purse_spent,
+                        purse_remaining, players_bought
+                   FROM teams WHERE tournament_id = :t ORDER BY purse_remaining DESC',
+                [':t' => $TOURNAMENT_ID]
+            );
+
+            $boardSold = Database::all(
+                "SELECT p.full_name, p.role, l.sold_price, t.name AS team_name
+                   FROM auction_lots l
+                   JOIN players p ON p.id = l.player_id
+                   JOIN teams   t ON t.id = l.sold_to_team_id
+                  WHERE l.tournament_id = :t AND l.status = 'sold'
+               ORDER BY l.closed_at DESC, l.id DESC",
+                [':t' => $TOURNAMENT_ID]
+            );
+
+            $boardToCall = Database::all(
+                "SELECT p.full_name, l.base_price
+                   FROM auction_lots l
+                   JOIN players p ON p.id = l.player_id
+                  WHERE l.tournament_id = :t AND l.status IN ('queued','live','paused')
+               ORDER BY l.lot_order",
+                [':t' => $TOURNAMENT_ID]
+            );
+
+            $boardIsAdmin = Auth::is(Auth::ROLE_ADMIN);
+
+            require dirname(__DIR__) . '/app/Views/partials/auction_board.php';
+            exit;
+        }
+
         $emptyTitle  = 'No auction is running';
         $emptyBody   = 'When the tournament director puts the first player under the hammer, the live board appears here.';
         $emptyHint   = null;
