@@ -125,7 +125,15 @@ do **not** re-import `schema.sql` — it drops every table. Import
 repeatable: run it twice and the second run stops at `#1060 - Duplicate
 column name 'username'`, which is MySQL saying the work is already done.
 `database/migrations/001_verify.sql` is read-only and tells you which state
-you are in — every row should read `OK`. It is
+you are in — every row should read `OK`.
+
+> **Select the database before running any of this.** In phpMyAdmin, click
+> the database in the left sidebar *first*, then open the SQL tab. Opened
+> from the server level no database is selected, `DATABASE()` is NULL, and
+> anything keyed on it reports nothing — which looks exactly like a
+> database that was never migrated. The verify script prints which
+> database it is reading as its first row, so that mistake is visible
+> rather than silent. It is
 additive: it adds the new columns and the `tournament_registrations` table,
 gives every existing account a username derived from its email address, and
 deletes nothing. A season already in progress survives it.
