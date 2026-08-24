@@ -25,6 +25,7 @@ declare(strict_types=1);
 require_once dirname(__DIR__) . '/config/config.php';
 
 use App\Core\Auth;
+use App\Services\TournamentService;
 
 $user = Auth::user();
 $role = $user['role'] ?? null;
@@ -51,12 +52,17 @@ $counts     = ['players' => 0, 'teams' => 0, 'sold' => 0];
 
 try {
     if (Database::isAvailable()) {
-        $tournament = Database::one(
-            'SELECT id, name, season_year, status FROM tournaments ORDER BY id LIMIT 1'
+        // The same tournament auction.php shows, so the counts on this page
+        // and the board behind the button can never describe different
+        // seasons. "The first tournament ever created" was not it.
+        $tid = (new TournamentService())->currentAuctionId();
+
+        $tournament = $tid === null ? null : Database::one(
+            'SELECT id, name, season_year, status FROM tournaments WHERE id = :t',
+            [':t' => $tid]
         );
 
         if ($tournament !== null) {
-            $tid = (int) $tournament['id'];
 
             $liveLot = Database::one(
                 'SELECT full_name, role, current_bid, base_price, bidder_team_name

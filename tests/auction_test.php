@@ -18,6 +18,7 @@ require_once dirname(__DIR__) . '/config/config.php';
 
 use App\Exceptions\AuctionException;
 use App\Services\AuctionService;
+use App\Services\TournamentService;
 
 $passed = 0;
 $failed = 0;
@@ -352,6 +353,95 @@ $passed_over = $auction->markUnsold(10, 1);
 is('a queued lot can be marked unsold', $passed_over['outcome'], 'unsold');
 is('the player returns to the pool',
     playerRow((int) lotRow(10)['player_id'])['status'], 'unsold');
+
+// ---------------------------------------------------------------------
+//  Which tournament the public board shows
+//
+//  This is a regression guard. auction.php used to hard-code tournament 1.
+//  Delete a first attempt and create another and the ids move on: id 1 is
+//  empty, and the board announces "No auction is running" through an
+//  auction that is plainly running, with players sold and purses spent.
+// ---------------------------------------------------------------------
+
+section('Which tournament the board shows');
+
+$tournaments = new TournamentService();
+
+/* A second tournament, with a player and a lot of its own. */
+$second = (int) $tournaments->create([
+    'name'                      => 'Second Season',
+    'season_year'               => 2027,
+    'start_date'                => date('Y-m-d'),
+    'auction_date'              => date('Y-m-d'),
+    'end_date'                  => date('Y-m-d', strtotime('+30 days')),
+    'team_name_change_deadline' => date('Y-m-d'),
+])['id'];
+
+Database::run(
+    'INSERT INTO players (tournament_id, full_name, display_name, country, role, base_price)
+     VALUES (:t, :n, :d, :c, :r, 200000)',
+    [':t' => $second, ':n' => 'Late Arrival', ':d' => 'L Arrival', ':c' => 'India', ':r' => 'batsman']
+);
+$latePlayer = Database::lastInsertId();
+
+Database::run(
+    "INSERT INTO auction_lots (tournament_id, player_id, lot_order, status, base_price)
+     VALUES (:t, :p, 1, 'queued', 200000)",
+    [':t' => $second, ':p' => $latePlayer]
+);
+
+/* Nothing under the hammer: the newest tournament with an auction wins. */
+Database::run("UPDATE auction_lots SET status = 'queued' WHERE status = 'live'");
+is('the newest tournament with an auction list wins',
+    $tournaments->currentAuctionId(), $second);
+
+/* A lot actually under the hammer beats "newest". Only a queued lot may
+   be flipped: chk_lot_sold refuses a sold lot that keeps its price. */
+Database::run("UPDATE auction_lots SET status = 'live'
+                WHERE tournament_id = 1 AND status = 'queued' LIMIT 1");
+is('but a lot under the hammer wins outright',
+    $tournaments->currentAuctionId(), 1);
+Database::run("UPDATE auction_lots SET status = 'queued' WHERE status = 'live'");
+
+is('an explicit choice is honoured', $tournaments->currentAuctionId(1), 1);
+
+/* Scrapping the first tournament — the situation that caused the report.
+   The owners go with it: users.team_id holds the cascade up, and
+   chk_users_team_role forbids an owner with no team, so there is no
+   halfway state to leave them in. */
+Database::run('DELETE FROM users WHERE team_id IN (SELECT id FROM teams WHERE tournament_id = 1)');
+Database::run('DELETE FROM tournaments WHERE id = 1');
+
+is('nothing is left in the tournament that used to be id 1',
+    (int) Database::scalar('SELECT COUNT(*) FROM auction_lots WHERE tournament_id = 1'), 0);
+is('id 1 no longer decides what the board shows',
+    $tournaments->currentAuctionId(), $second);
+is('and a stale ?tournament=1 link falls back instead of blanking the page',
+    $tournaments->currentAuctionId(1), $second);
+
+/* The page itself, rendered in its own process, exactly as a visitor
+   with no account gets it. Asserting the service alone would have missed
+   the bug: the service was right, the page never asked it. */
+$html = (string) shell_exec('php ' . escapeshellarg(BASE_PATH . '/public/auction.php') . ' 2>&1');
+
+is('the board renders for a tournament that is not id 1',
+    str_contains($html, 'Auction board'), true);
+is('and names the player waiting in it',
+    str_contains($html, 'Late Arrival'), true);
+is('it no longer claims nothing is running',
+    str_contains($html, 'No auction is running'), false);
+
+/* Signed out. A player who has not signed in must still see the board —
+   the whole point of it is that the room can watch. */
+is('a signed-out visitor is not asked to sign in first',
+    str_contains($html, 'Sign in'), true);
+is('and gets the purse board with it',
+    str_contains($html, 'Purse board'), true);
+
+/* With no tournament at all it must say so, not invent one. */
+Database::run('DELETE FROM tournaments');
+is('an empty install resolves to no tournament',
+    $tournaments->currentAuctionId(), null);
 
 // ---------------------------------------------------------------------
 

@@ -717,6 +717,65 @@ final class TournamentService
     //  Reads
     // -----------------------------------------------------------------
 
+    /**
+     * Which tournament the auction screens are looking at.
+     *
+     * Every public auction page used to assume tournament 1. That holds
+     * only until somebody creates a second tournament, or deletes their
+     * first and starts again — the ids move on, id 1 is empty, and the
+     * live auction board reports "No auction is running" through an
+     * entire auction that is plainly happening. This resolves it instead
+     * of assuming it.
+     *
+     * In order of authority:
+     *   1. what the caller asked for, if it exists
+     *   2. whichever tournament has a lot under the hammer right now
+     *   3. the newest tournament that has an auction list at all
+     *   4. the newest tournament, so a brand new install still has a name
+     *
+     * Null only when there are no tournaments whatsoever.
+     */
+    public function currentAuctionId(?int $preferred = null): ?int
+    {
+        if ($preferred !== null && $preferred > 0) {
+            $asked = (int) Database::scalar(
+                'SELECT id FROM tournaments WHERE id = :id',
+                [':id' => $preferred]
+            );
+
+            if ($asked > 0) {
+                return $asked;
+            }
+        }
+
+        $live = (int) Database::scalar(
+            "SELECT tournament_id FROM auction_lots WHERE status = 'live' ORDER BY id DESC LIMIT 1"
+        );
+
+        if ($live > 0) {
+            return $live;
+        }
+
+        $withLots = (int) Database::scalar(
+            'SELECT t.id
+               FROM tournaments t
+               JOIN auction_lots l ON l.tournament_id = t.id
+           GROUP BY t.id, t.season_year
+           ORDER BY t.season_year DESC, t.id DESC
+              LIMIT 1'
+        );
+
+        if ($withLots > 0) {
+            return $withLots;
+        }
+
+        $newest = (int) Database::scalar(
+            'SELECT id FROM tournaments ORDER BY season_year DESC, id DESC LIMIT 1'
+        );
+
+        return $newest > 0 ? $newest : null;
+    }
+
     /** @return array<string,mixed> */
     public function find(int $tournamentId): array
     {

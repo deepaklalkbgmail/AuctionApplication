@@ -25,6 +25,7 @@ require_once dirname(__DIR__) . '/config/config.php';
 
 use App\Core\Auth;
 use App\Core\Security;
+use App\Services\TournamentService;
 
 $ALLOWED_ROLES = [Auth::ROLE_ADMIN, Auth::ROLE_OWNER, Auth::ROLE_SCORER, Auth::ROLE_VIEWER];
 
@@ -49,7 +50,21 @@ $viewer = Auth::user() ?? [
     'team_id' => $role === Auth::ROLE_OWNER ? 3 : null,
 ];
 
-$TOURNAMENT_ID = 1;
+// Which tournament this page is about. Never assume id 1: delete a
+// tournament and start again and the ids move on, leaving id 1 empty and
+// this screen insisting nothing is happening. ?tournament=N overrides,
+// which is what the administrator's sheet links with.
+$TOURNAMENT_ID = 0;
+
+if (Database::isAvailable()) {
+    try {
+        $TOURNAMENT_ID = (new TournamentService())->currentAuctionId(
+            isset($_GET['tournament']) ? (int) $_GET['tournament'] : null
+        ) ?? 0;
+    } catch (Throwable $e) {
+        error_log('[auction] could not resolve a tournament: ' . $e->getMessage());
+    }
+}
 
 // ---------------------------------------------------------------------
 //  Live data (prepared statements only) with a demo fallback
@@ -57,7 +72,7 @@ $TOURNAMENT_ID = 1;
 $state    = null;
 $liveData = false;
 
-if (Database::isAvailable()) {
+if ($TOURNAMENT_ID > 0) {
     try {
         $tournament = Database::one(
             'SELECT id, name, season_year, bid_increment, bid_timer_seconds, max_squad_size
@@ -118,10 +133,15 @@ if (Database::isAvailable()) {
 
 // A clean installation has no auction yet. Show that honestly rather than
 // falling back to the bundled fixtures — invented players on a production
-// site look exactly like a bug, and cannot be told apart from one. The
-// fallback stays for local development, where it is useful for UI work.
+// site look exactly like a bug, and cannot be told apart from one.
+//
+// The demo fixtures are for UI work with no database behind the page, so
+// they are reached only when there is no real tournament to show. Once one
+// exists it wins in every environment: a staging copy that quietly showed
+// made-up players instead of the auction actually running on it would hide
+// this very bug from the person testing for it.
 if ($state === null) {
-    if (IS_PRODUCTION) {
+    if ($TOURNAMENT_ID > 0) {
         // No lot is live. Under the manual method none ever is — the
         // auction is called in the room and recorded afterwards — so
         // "nothing to see" would be wrong for an auction that is well
@@ -188,10 +208,16 @@ if ($state === null) {
         // emptiness, so give them the button rather than instructions for
         // finding it. How many players are waiting decides what to say.
         if (Auth::is(Auth::ROLE_ADMIN)) {
-            $queued = (int) Database::scalar(
-                "SELECT COUNT(*) FROM auction_lots WHERE tournament_id = :t AND status = 'queued'",
-                [':t' => $TOURNAMENT_ID]
-            );
+            $queued = 0;
+
+            try {
+                $queued = (int) Database::scalar(
+                    "SELECT COUNT(*) FROM auction_lots WHERE tournament_id = :t AND status = 'queued'",
+                    [':t' => $TOURNAMENT_ID]
+                );
+            } catch (Throwable $e) {
+                error_log('[board] queue unavailable: ' . $e->getMessage());
+            }
 
             if ($queued > 0) {
                 $emptyAction = [
@@ -204,6 +230,20 @@ if ($state === null) {
                            . 'approving an application is what creates their auction lot.';
             }
         }
+
+        require dirname(__DIR__) . '/app/Views/partials/empty_state.php';
+        exit;
+    }
+
+    // No tournament at all. On a live site say so; demo players on a
+    // production URL are indistinguishable from a broken import.
+    if (IS_PRODUCTION) {
+        $emptyTitle  = 'No auction is running';
+        $emptyBody   = 'There is no tournament yet. Once one is created and its players are approved, the board appears here.';
+        $emptyHint   = Auth::is(Auth::ROLE_ADMIN)
+            ? 'Create one under Administration → Tournaments.'
+            : null;
+        $emptyAction = null;
 
         require dirname(__DIR__) . '/app/Views/partials/empty_state.php';
         exit;

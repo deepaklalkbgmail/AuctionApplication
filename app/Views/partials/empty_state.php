@@ -81,7 +81,19 @@ $emptyAction ??= null;
                class="rounded-xl bg-gradient-to-r from-emerald-400 to-emerald-500 px-5 py-3 text-[13px] font-black uppercase tracking-wide text-ink-900 shadow-lg shadow-emerald-500/25 transition hover:brightness-110">
                 Home
             </a>
-            <?php if (!\App\Core\Auth::check()): ?>
+            <?php if (\App\Core\Auth::check()): ?>
+                <?php /* Without this a signed-in visitor who lands here has no
+                         way out but the address bar: this page carries none of
+                         the usual navigation. POST, because logout.php refuses
+                         a GET. */ ?>
+                <form method="post" action="logout.php">
+                    <?= csrf_field() ?>
+                    <button type="submit"
+                            class="rounded-xl border border-white/15 px-5 py-3 text-[13px] font-black uppercase tracking-wide text-slate-200 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-300">
+                        Sign out
+                    </button>
+                </form>
+            <?php else: ?>
                 <a href="login.php"
                    class="rounded-xl border border-white/15 px-5 py-3 text-[13px] font-black uppercase tracking-wide text-slate-200 transition hover:bg-white/5">
                     Sign in

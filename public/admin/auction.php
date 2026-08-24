@@ -196,9 +196,17 @@ page_message($error);
 
 <div class="flex flex-wrap items-baseline justify-between gap-3">
     <h1 class="text-2xl font-extrabold tracking-tight text-white">Auction</h1>
-    <p class="text-[13px] text-slate-400">
-        Call the lot in the room, then record what it went for.
-    </p>
+    <div class="flex flex-wrap items-baseline gap-4">
+        <p class="text-[13px] text-slate-400">
+            Call the lot in the room, then record what it went for.
+        </p>
+        <?php /* The room's own screen. Carrying the tournament across means
+                 the board never shows a different one from this sheet. */ ?>
+        <a href="../auction.php?tournament=<?= $tournamentId ?>" target="_blank" rel="noopener"
+           class="rounded-lg border border-white/10 px-3 py-1.5 text-[13px] font-semibold text-slate-300 transition hover:bg-white/5">
+            Open the public board
+        </a>
+    </div>
 </div>
 
 <!-- --------------------------------------------------------- tournament -->
