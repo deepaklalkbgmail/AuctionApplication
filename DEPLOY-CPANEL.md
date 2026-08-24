@@ -119,7 +119,13 @@ version in Step 0.
 
 If your database was created before registrations and tournaments existed,
 do **not** re-import `schema.sql` — it drops every table. Import
-`database/migrations/001_accounts_and_registration.sql` instead. It is
+`database/migrations/001_accounts_and_registration.sql` instead.
+
+**Check first whether it has already been applied.** The migration is not
+repeatable: run it twice and the second run stops at `#1060 - Duplicate
+column name 'username'`, which is MySQL saying the work is already done.
+`database/migrations/001_verify.sql` is read-only and tells you which state
+you are in — every row should read `OK`. It is
 additive: it adds the new columns and the `tournament_registrations` table,
 gives every existing account a username derived from its email address, and
 deletes nothing. A season already in progress survives it.
