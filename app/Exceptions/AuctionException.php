@@ -32,6 +32,8 @@ final class AuctionException extends RuntimeException
     public const OVERSEAS_LIMIT    = 'OVERSEAS_LIMIT';
     public const NO_BIDS           = 'NO_BIDS';
     public const NOTHING_QUEUED    = 'NOTHING_QUEUED';
+    public const ALREADY_SOLD      = 'ALREADY_SOLD';
+    public const NOT_SOLD          = 'NOT_SOLD';
 
     /** @param array<string,mixed> $context */
     public function __construct(

@@ -38,6 +38,7 @@ $links = [
     ['href' => 'tournaments.php', 'label' => 'Tournaments'],
     ['href' => 'applications.php','label' => 'Applications'],
     ['href' => 'teams.php',       'label' => 'Teams'],
+    ['href' => 'auction.php',     'label' => 'Auction'],
 ];
 
 page_head('Administration', '../', $links);
@@ -113,8 +114,8 @@ page_message();
          'Decide who gets into each tournament. Approving is what puts a player into the auction list.'],
         ['teams.php', 'Teams',
          'Create each team and name its one owner. The owner sets the team name and can change it until the deadline.'],
-        ['../auction.php', 'Run the auction',
-         'The live board: start the next lot, take bids, and bring the hammer down.'],
+        ['auction.php', 'Run the auction',
+         'The auctioneer\'s sheet. Call each lot in the room, then record the price it went for and the team that bought it.'],
         ['../score.php', 'Score a match',
          'The scorer\'s pad. Ball by ball, with an undo.'],
     ] as [$href, $title, $blurb]): ?>

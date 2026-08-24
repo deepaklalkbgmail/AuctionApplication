@@ -111,6 +111,7 @@ $links = [
     ['href' => 'tournaments.php',  'label' => 'Tournaments'],
     ['href' => 'applications.php', 'label' => 'Applications'],
     ['href' => 'teams.php',        'label' => 'Teams'],
+    ['href' => 'auction.php',      'label' => 'Auction'],
 ];
 
 page_head('People', '../', $links);

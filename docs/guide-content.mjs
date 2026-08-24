@@ -396,54 +396,43 @@ ${table(['Message', 'What it means'], [
 ])}`,
         },
         {
-            title: 'Reading the auction screen',
+            title: 'How the auction actually runs',
             body: `
-${figure('auction-board', 'The auction board during a live lot.')}
+<p>The auction is <strong>called aloud in the room</strong>. An auctioneer names each
+player and you bid out loud, or with a paddle, the way an auction has always worked. You do
+not bid through the application, and there is no countdown on a screen to beat.</p>
 
-${table(['Area', 'Shows'], [
-    ['<strong>Under the hammer</strong>', 'The player being auctioned — role, base price, career record'],
-    ['<strong>Current bid</strong>', 'The standing bid, and which team holds it'],
-    ['<strong>Countdown</strong>', 'Seconds left. Green, then amber under 10, then red under 5'],
-    ['<strong>Place your bid</strong>', 'Four quick amounts, and the main bid button'],
-    ['<strong>Purse board</strong>', 'Every team’s remaining money and squad size. Yours is outlined'],
-    ['<strong>Bid feed</strong>', 'The last few bids, newest first'],
-    ['<strong>Up next</strong>', 'The players coming after this one'],
+<p>When the hammer falls, the administrator types the result in: this player, to your team,
+for this price. Within a second or two it appears everywhere.</p>
+
+${callout('note', 'So what is the screen for?',
+`Knowing what you can afford. Your purse, what you have spent, who you have bought — and
+the same for every rival, which is what tells you whether the person bidding against you
+can actually follow you up.`)}
+
+<h3>Before you raise your hand</h3>
+
+${steps([
+    'Know your remaining purse — it is on <strong>My team</strong>.',
+    'Know how many places you still have to fill, and what the cheapest players left are going for.',
+    'Work out your ceiling — the next section shows how.',
 ])}
 
-<p>Your remaining purse is in the header at all times. The board refreshes by itself every
-few seconds — you do not need to reload it.</p>`,
-        },
-        {
-            title: 'Placing a bid',
-            body: `
-<p>Press one of the quick amount buttons, or the main <strong>Bid</strong> button for the
-smallest legal raise. That is the whole action. There is nothing to confirm.</p>
+<h3>What the administrator will be refused</h3>
 
-${callout('note', 'Every bid restarts the clock',
-`Including yours. Nobody wins a lot by clicking last as the timer runs out — the countdown
-goes back to full on each accepted bid, so bidding ends when the room stops bidding, not
-when the clock happens to run out.`)}
+<p>If a bid you win cannot actually be recorded, the room will hear about it immediately.
+It happens for exactly three reasons:</p>
 
-<p>Bids move in fixed steps — the <strong>increment</strong> the administrator set for the
-tournament. You cannot bid an amount off that ladder, which keeps the bidding readable for
-everyone in the room.</p>`,
-        },
-        {
-            title: 'Why a bid can be refused',
-            body: `
-<p>A greyed-out button means the bid is already impossible. If a bid is refused after you
-press it, the message says exactly why.</p>
+${table(['Refusal', 'What it means for you'], [
+    ['Your team cannot pay that much', 'You bid past your purse. The bid does not stand'],
+    ['Your squad is already full', 'You have reached the maximum squad size and are done buying'],
+    ['Your overseas quota is full', 'You may still bid for domestic players'],
+])}
 
-${table(['Message', 'What happened', 'What to do'], [
-    ['You already hold the highest bid', 'You are the leading bidder', 'Wait. Bidding against yourself only raises your own price'],
-    ['The bid must be at least …', 'Below the next legal step', 'Use the amount shown'],
-    ['Bids must move in steps of …', 'Off the increment ladder', 'Use one of the quick buttons'],
-    ['… can bid at most …', 'The purse cannot cover it once the squad reserve is set aside', 'See the next section'],
-    ['… already has a full squad of …', 'You have reached the maximum squad size', 'You are done buying'],
-    ['… has already signed … overseas players', 'Overseas quota reached', 'You can still bid for domestic players'],
-    ['The hammer has already fallen on this lot', 'Too late', 'Wait for the next player'],
-    ['This lot is not open for bidding', 'The lot is paused or closed', 'Wait for the administrator'],
-], 'tight')}`,
+${callout('warn', 'Bid within your purse',
+`Nothing stops you calling out a number in the room. The application stops it being
+recorded. That is an awkward moment in front of everybody, so keep an eye on your own
+figure — it is on screen for exactly this reason.`)}`,
         },
         {
             title: 'Why you cannot spend your whole purse',
@@ -492,16 +481,17 @@ gone wrong, say so immediately — correcting it means an administrator editing 
             title: 'Advice for auction day',
             body: `
 <ul class="advice">
-  <li><strong>Know your ceiling before your lot comes up.</strong> The screen tells you the
-      most you can bid; look at it before the bidding starts, not during.</li>
+  <li><strong>Work out your ceiling before your player is called</strong>, not while the
+      room is looking at you. The arithmetic is in the previous section.</li>
+  <li><strong>Keep the screen open on your phone.</strong> Your purse changes every time a
+      sale is recorded, including your own.</li>
   <li><strong>Fill the cheap places early or late, but decide which.</strong> Every unfilled
       place holds money back from your big bids.</li>
-  <li><strong>Watch the other purses.</strong> If a rival cannot afford the next step, the
-      bidding is over whatever they say.</li>
-  <li><strong>Use one device.</strong> Two browser windows bidding for the same team will
-      not break anything, but you will lose track.</li>
-  <li><strong>The clock is not the enemy.</strong> It restarts with every bid. Do not panic-bid
-      because it is at three seconds.</li>
+  <li><strong>Watch the other purses.</strong> If a rival cannot afford to follow you, the
+      bidding is over whatever they say in the room.</li>
+  <li><strong>Check the price that was entered.</strong> The administrator is typing figures
+      quickly. If your purse looks wrong after a lot, say so at once — it can be undone in
+      seconds, and it is far harder to unpick three lots later.</li>
 </ul>`,
         },
         passwordSection('owner'),
@@ -509,8 +499,9 @@ gone wrong, say so immediately — correcting it means an administrator editing 
             title: 'If something goes wrong',
             body: table(['What you see', 'What to do'], [
                 ['“You do not own a team”', 'The administrator has not assigned one yet, or has just done it — click again'],
-                ['The board is not updating', 'It refreshes every few seconds; reload the page'],
-                ['Your purse looks wrong', 'Tell the administrator immediately, before the next lot'],
+                ['Your purse has not changed after a sale', 'Reload the page. If it is still wrong, tell the administrator'],
+                ['Your purse looks wrong', 'Tell the administrator before the next lot — a sale can be undone, and the money comes straight back'],
+                ['A player you won is not in your squad', 'The sale has not been recorded yet, or was recorded against another team. Ask the administrator'],
                 ['“Your session expired”', 'The page sat open too long. Sign in again'],
                 ['You cannot rename your team', 'The name change deadline has passed — ask an administrator'],
                 ['You are signed out unexpectedly', 'Your account may have been suspended. Ask the administrator'],
@@ -518,14 +509,13 @@ gone wrong, say so immediately — correcting it means an administrator editing 
         },
         glossary([
             ['Base price', 'The lowest a player can be bought for'],
-            ['Increment', 'The fixed step between bids'],
             ['Lot', 'One player being auctioned'],
             ['Purse', 'The money your team has to spend'],
             ['Reserve', 'Purse held back so you can still complete a legal squad'],
             ['Short name', 'Your 2–6 character badge, like MI or CSK'],
             ['Squad cap', 'The most players one team may hold'],
-            ['Under the hammer', 'The player currently being bid for'],
-            ['Unsold', 'A lot that closed with no bid; the player can be re-listed'],
+            ['Under the hammer', 'The player currently being called'],
+            ['Unsold', 'A player nobody bid for; they can be re-listed in a later round'],
         ]),
         helpSection,
     ],
@@ -1046,78 +1036,71 @@ stays in use.</p>`,
         {
             title: 'Running the auction',
             body: `
-<h3>Starting it</h3>
+<p>The auction is <strong>called aloud in the room</strong>. An auctioneer names the
+player, owners bid by voice or by paddle, and the hammer falls. The application does not
+run the bidding — it is the record of it.</p>
 
-<p>Nothing is under the hammer until you put it there. Open the auction
-board — <strong>Run the auction</strong> from the hub, or the
-<strong>Auction</strong> tab.</p>
+<p><strong>Administration → Auction</strong> is your sheet. For each player you type the
+price that was agreed and the team that bought them.</p>
 
-<p>Before the first lot the board reads <strong>No auction is running</strong>,
-with a single button: <strong>Open the first player</strong>. It tells you how
-many are queued. Press it, and the first player is live with the countdown
-running.</p>
+${figure('admin-auction', 'The auctioneer’s sheet. Purses across the top, players still to call underneath.')}
 
-${callout('warn', 'If the button is not there',
-`It appears only when players are actually queued. If instead you are told nobody
-is queued, no application has been approved yet — and approving an application is
-what creates a player's auction lot. Go to
-<strong>Administration → Applications</strong> first.`)}
+<h3>The purse board</h3>
 
-<h3>The controls</h3>
+<p>Always at the top, whether or not anything is being sold. Every team's remaining money,
+what they have spent, and how many they have bought. This is what you check before
+accepting a bid from the floor, and it is the question the room asks between every lot.</p>
 
-<p>Once a lot is live, your controls sit under the player card.</p>
-
-${table(['Button', 'Does', 'When'], [
-    ['<strong>Next player</strong>', 'Puts the next queued player under the hammer', 'The previous lot has been closed'],
-    ['<strong>Sold</strong>', 'Awards the player to the leading team and debits the purse', 'Bidding has stopped and someone leads'],
-    ['<strong>Unsold</strong>', 'Closes the lot with no winner; the player returns to the pool', 'The countdown expired with no bid'],
-    ['<strong>Pause</strong>', 'Freezes the countdown', 'A dispute, or a break'],
-    ['<strong>Reset timer</strong>', 'Puts the countdown back to full', 'You gave the room more time'],
-])}
-
-<p><strong>The rhythm of a lot:</strong></p>
+<h3>Recording a sale</h3>
 
 ${steps([
-    'The next player appears with base price, role and career record.',
-    'Owners bid. Each bid restarts the countdown, so the room decides when bidding is over — not the clock.',
-    'The countdown reaches zero, or the room goes quiet.',
-    'Press <strong>Sold</strong> — or <strong>Unsold</strong> if nobody bid. Every screen updates immediately.',
-    'Press <strong>Next player</strong> to open the following lot, and go round again.',
+    'Find the player — the list is in lot order, and the search box takes part of a name.',
+    'Choose the <strong>team</strong>. Each one shows what it has left, so you can see at a glance whether the bid is affordable.',
+    'Type the <strong>price</strong> that was called.',
+    'Press <strong>Sold</strong>.',
 ])}
 
-${callout('note', 'One press per lot, deliberately',
-`The next player does not come up by itself. An auction has a rhythm the room
-sets — a sale gets a reaction, somebody asks a question, an owner wants a moment
-to count. You decide when the next name goes up.
-<br><br>
-Pressing <strong>Next player</strong> while a lot is still open is refused, with
-“Close the current lot before starting the next one.” Nothing is skipped by a
-double-press.`)}
+<p>Everything moves in one step: the player joins that squad, the money leaves the purse,
+and the purse board updates. Either all of it happens or none of it does — a player can
+never be recorded as sold without the money moving.</p>
 
-${callout('stop', 'Sold is final',
-`There is no undo on a sale. The lot closes, the player joins the squad and the money moves
-in one transaction — all of it or none of it, so a player can never be sold without the
-purse being debited. But it cannot be reversed from the application. When you are unsure,
-<strong>Pause</strong> instead.`)}
+<h3>What it will not accept</h3>
 
-<h3>Re-listing unsold players</h3>
+${table(['Message', 'Why'], [
+    ['The price cannot be below the base price of …', 'The base price you set when approving the application'],
+    ['… only has ₹X left, so it cannot pay ₹Y', 'The team cannot afford it. Check the figure, or the team'],
+    ['… already has a full squad of …', 'That team has reached the maximum squad size'],
+    ['… has already signed … overseas players', 'The overseas quota for that team is full'],
+    ['… has already been sold', 'Undo the earlier sale first'],
+])}
 
-<p>Unsold players stay in the pool. To bring them back for a second round, an existing lot
-is re-opened rather than a new one created — a player has exactly one lot for the season.
-This is still done in the database:</p>
+${callout('note', 'What it deliberately does not check',
+`There is no increment ladder and no countdown. A room calls whatever it calls — ₹4,60,000
+against a ₹50,000 step is perfectly normal — and refusing to record it would make your
+record disagree with your auction. The rules that stay are the ones the room can genuinely
+get wrong: money that does not exist, and squads that are already full.`)}
 
-<pre><code>UPDATE auction_lots
-   SET status = 'queued', current_bid = NULL, current_bidder_team_id = NULL,
-       bid_count = 0, started_at = NULL, ends_at = NULL, closed_at = NULL,
-       lot_order = lot_order + 1000
- WHERE tournament_id = 1 AND status = 'unsold';
+<h3>Passing a player over</h3>
 
-UPDATE players
-   SET status = 'available'
- WHERE tournament_id = 1 AND status = 'unsold';</code></pre>
+<p><strong>Unsold</strong> records that nobody bid. The player moves to
+<strong>Passed over</strong> at the bottom of the screen, and one press puts them back in
+the queue for a later round — which is how most auctions handle a quiet first pass.</p>
 
-<p>Bids from the first round stay in the log as history; the new round starts from the base
-price again.</p>`,
+<h3>Undo</h3>
+
+${callout('tip', 'Typing a price by hand means mistyping one',
+`Every sale has an <strong>Undo</strong> beside it. It returns the money, takes the player
+out of the squad, and puts them back in the list to be recorded again. Use it the moment
+you notice — it is far easier than explaining a wrong purse three lots later.`)}
+
+<h3>If a team runs short</h3>
+
+<p>After a sale you may see an amber note: <em>“… now has ₹X left, which is ₹Y short of
+what a full squad would cost.”</em></p>
+
+<p>That is advice, not a refusal. The sale already happened in the room; the application
+records it and tells you what it means. It is up to you and the owner what to do about
+it — usually the team buys cheaply from there on.</p>`,
         },
         {
             title: 'Setting up a match',
@@ -1220,8 +1203,9 @@ before the tournament goes live.`)}`,
   <li><strong>Fixtures are set up in the database.</strong> See <em>Setting up a match</em>.</li>
   <li><strong>Only the first innings.</strong> The innings break, the second-innings target,
       the chase and the result are not implemented.</li>
-  <li><strong>No sale undo.</strong> Correcting a mistaken <strong>Sold</strong> means a
-      database edit.</li>
+  <li><strong>No live on-screen bidding.</strong> By design — the auction is called in the
+      room and recorded here. The bidding board still exists for anyone who wants owners
+      to bid on screen, but the sheet is the supported way.</li>
   <li><strong>No email.</strong> Approvals, rejections and issued passwords are not emailed.
       Somebody has to tell the person; every state is visible on their own screen.</li>
   <li><strong>No password reset by email.</strong> You reset it and read out the new one.</li>

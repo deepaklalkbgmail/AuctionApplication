@@ -311,6 +311,31 @@ for ($i = 0; $i < 400; $i++) {
 
 is('400 generated codes contain none of 0 o O i I L l 1', $clean, true);
 
+// Issued passwords have to satisfy the strength rule the application
+// applies to them. Drawn purely at random from an alphabet of 23 letters
+// and 8 digits, roughly one in eleven came out with no digit at all — so
+// one scorer account in eleven failed to be created, and the administrator
+// was told to fix a password they never chose.
+$weak      = 0;
+$confusing = 0;
+
+for ($i = 0; $i < 2000; $i++) {
+    $issued = $accounts->readablePassword();
+
+    if (strlen($issued) < 8
+        || !preg_match('/[A-Za-z]/', $issued)
+        || !preg_match('/[0-9]/', $issued)) {
+        $weak++;
+    }
+
+    if (preg_match('/[0oO1IiLl]/', $issued)) {
+        $confusing++;
+    }
+}
+
+is('2000 issued passwords all satisfy the strength rule', $weak, 0);
+is('and none contains a character that gets misread',     $confusing, 0);
+
 // =====================================================================
 section('Creating a tournament');
 

@@ -38,6 +38,7 @@ $links = [
     ['href' => 'tournaments.php',  'label' => 'Tournaments'],
     ['href' => 'applications.php', 'label' => 'Applications'],
     ['href' => 'teams.php',        'label' => 'Teams', 'current' => true],
+    ['href' => 'auction.php',      'label' => 'Auction'],
 ];
 
 if ($all === []) {
@@ -161,9 +162,12 @@ page_message($error);
                     <div class="text-right">
                         <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Purse left</p>
                         <p class="text-xl font-black text-emerald-400">
-                            ₹<?= e(number_format((float) $team['purse_remaining'] / 100000, 2)) ?> L
+                            <?= e(rupees($team['purse_remaining'])) ?>
                         </p>
-                        <p class="text-[11px] text-slate-500"><?= (int) $team['players_bought'] ?> bought</p>
+                        <p class="text-[11px] text-slate-500">
+                            of <?= e(rupees($team['purse_total'])) ?>
+                            · <?= (int) $team['players_bought'] ?> bought
+                        </p>
                     </div>
                 </div>
 

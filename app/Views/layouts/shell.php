@@ -266,6 +266,31 @@ function player_type_options(bool $blankFirst = true): array
     return $blankFirst ? ['' => 'Choose one…'] + $options : $options;
 }
 
+/**
+ * Money the way the room says it: ₹12,34,567.
+ *
+ * Indian digit grouping — last three, then pairs. Written out in full
+ * rather than as "₹12.35 L", because an abbreviation is one more thing to
+ * decode when somebody is checking whether a team can afford a bid.
+ */
+function rupees(float|string|null $amount): string
+{
+    if ($amount === null || $amount === '') {
+        return '—';
+    }
+
+    $n     = (int) round((float) $amount);
+    $s     = (string) abs($n);
+    $last3 = substr($s, -3);
+    $rest  = substr($s, 0, -3);
+
+    if ($rest !== '') {
+        $last3 = preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', $rest) . ',' . $last3;
+    }
+
+    return ($n < 0 ? '-' : '') . '₹' . $last3;
+}
+
 /** Pretty-print a stored DATE, or a dash when it is not set. */
 function pretty_date(?string $date): string
 {

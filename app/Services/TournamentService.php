@@ -86,13 +86,13 @@ final class TournamentService
                 ':auction'   => $dates['auction_date'],
                 ':end'       => $dates['end_date'],
                 ':rename'    => $dates['team_name_change_deadline'],
-                ':purse'     => $this->money($in['purse_per_team'] ?? 10000000, 'Purse per team'),
-                ':minSquad'  => $this->count($in['min_squad_size'] ?? 11, 'Minimum squad size', 1, 25),
-                ':maxSquad'  => $this->count($in['max_squad_size'] ?? 15, 'Maximum squad size', 1, 25),
-                ':overseas'  => $this->count($in['max_overseas'] ?? 4, 'Overseas limit', 0, 25),
-                ':increment' => $this->money($in['bid_increment'] ?? 500000, 'Bid increment'),
-                ':timer'     => $this->count($in['bid_timer_seconds'] ?? 30, 'Bid timer', 5, 600),
-                ':overs'     => $this->count($in['overs_per_innings'] ?? 20, 'Overs per innings', 1, 50),
+                ':purse'     => $this->money($in['purse_per_team'] ?? null, 'Purse per team', 10000000),
+                ':minSquad'  => $this->count($in['min_squad_size'] ?? null, 'Minimum squad size', 1, 25, 11),
+                ':maxSquad'  => $this->count($in['max_squad_size'] ?? null, 'Maximum squad size', 1, 25, 15),
+                ':overseas'  => $this->count($in['max_overseas'] ?? null, 'Overseas limit', 0, 25, 4),
+                ':increment' => $this->money($in['bid_increment'] ?? null, 'Bid increment', 500000),
+                ':timer'     => $this->count($in['bid_timer_seconds'] ?? null, 'Bid timer', 5, 600, 30),
+                ':overs'     => $this->count($in['overs_per_innings'] ?? null, 'Overs per innings', 1, 50, 20),
                 ':status'    => 'draft',
             ]
         );
@@ -992,10 +992,21 @@ final class TournamentService
         return preg_match('/^#[0-9A-Fa-f]{6}$/', $value) === 1 ? $value : '#22c55e';
     }
 
-    /** Returns a DECIMAL(14,2)-safe string, never a float. */
-    private function money(mixed $value, string $label): string
+    /**
+     * Returns a DECIMAL(14,2)-safe string, never a float.
+     *
+     * A blank falls back to $default. A browser posts an empty string for a
+     * field the person cleared, not a missing key — so `?? $default` at the
+     * call site never fires, and a field the form calls optional would be
+     * refused for being empty. It was.
+     */
+    private function money(mixed $value, string $label, float|int|string|null $default = null): string
     {
-        $value = is_string($value) ? str_replace([',', ' ', '₹'], '', $value) : $value;
+        if ($default !== null && (is_string($value) ? trim($value) === '' : $value === null)) {
+            $value = $default;
+        }
+
+        $value = is_string($value) ? str_replace([',', ' ', '₹'], '', trim($value)) : $value;
 
         if (!is_numeric($value) || (float) $value <= 0) {
             throw new AccountException(AccountException::VALIDATION, "{$label} must be a positive amount.");
@@ -1004,8 +1015,12 @@ final class TournamentService
         return number_format((float) $value, 2, '.', '');
     }
 
-    private function count(mixed $value, string $label, int $min, int $max): int
+    private function count(mixed $value, string $label, int $min, int $max, ?int $default = null): int
     {
+        if ($default !== null && (is_string($value) ? trim($value) === '' : $value === null)) {
+            $value = $default;
+        }
+
         if (!is_numeric($value)) {
             throw new AccountException(AccountException::VALIDATION, "{$label} must be a number.");
         }

@@ -212,47 +212,8 @@ final class AuctionService
 
             $priceRupees = self::rupees($price);
 
-            Database::run(
-                'UPDATE auction_lots
-                    SET status             = :sold,
-                        sold_to_team_id    = :team,
-                        sold_price         = :price,
-                        closed_at          = NOW(),
-                        closed_by_user_id  = :user
-                  WHERE id = :lot',
-                [':sold' => 'sold', ':team' => $teamId, ':price' => $priceRupees,
-                 ':user' => $closedByUserId, ':lot' => $lotId]
-            );
-
-            // players.status -> 'sold'. The chk_player_sold constraint refuses
-            // this row unless team_id is set and the price clears base price,
-            // so a half-applied sale cannot be written even by accident.
-            Database::run(
-                'UPDATE players
-                    SET status     = :sold,
-                        team_id    = :team,
-                        sold_price = :price
-                  WHERE id = :player',
-                [':sold' => 'sold', ':team' => $teamId, ':price' => $priceRupees,
-                 ':player' => (int) $lot['player_id']]
-            );
-
-            // Debit the purse. purse_remaining is a generated column, so it
-            // follows automatically; chk_team_spent rejects an overdraft.
-            Database::run(
-                'UPDATE teams
-                    SET purse_spent     = purse_spent + :price,
-                        players_bought  = players_bought + 1,
-                        overseas_bought = overseas_bought + :overseas
-                  WHERE id = :team',
-                [':price' => $priceRupees, ':overseas' => (int) $lot['is_overseas'], ':team' => $teamId]
-            );
-
-            Database::run(
-                'UPDATE auction_bids SET is_winning = 1
-                  WHERE lot_id = :lot AND team_id = :team AND bid_amount = :price',
-                [':lot' => $lotId, ':team' => $teamId, ':price' => $priceRupees]
-            );
+            // Same four writes as a manually recorded sale — see applySale().
+            $this->applySale($lot, $teamId, $price, $closedByUserId);
 
             $fresh = $this->lockTeam($teamId);
 
@@ -272,6 +233,251 @@ final class AuctionService
     }
 
     /**
+     * =================================================================
+     *  Record a sale that happened in the room
+     * =================================================================
+     *
+     *  The auction is called aloud by an auctioneer; the application is
+     *  the record, not the bidding floor. So the administrator types in
+     *  what was actually agreed: this player, to that team, for this much.
+     *
+     *  It writes exactly what sell() writes — the same four rows in the
+     *  same transaction — so a manually recorded sale and one closed from
+     *  the live board are indistinguishable afterwards. The difference is
+     *  only in what is checked beforehand:
+     *
+     *    kept   the money must exist, and the squad must have room. Those
+     *           are arithmetic and rules, and the room can get them wrong.
+     *    kept   the price cannot be below the base price.
+     *    gone   the increment ladder. A room calls whatever it calls, and
+     *           refusing to record ₹4,60,000 because the step is ₹50,000
+     *           would make the record disagree with the auction.
+     *    gone   the countdown and "you already lead". There is no clock.
+     *
+     *  The squad reserve — money held back so a team can still field an
+     *  eleven — is reported rather than enforced, for the same reason:
+     *  the sale already happened. The screen shows the warning; it does
+     *  not refuse the entry.
+     *
+     * @return array<string,mixed>
+     */
+    public function recordSale(
+        int $lotId,
+        int $teamId,
+        float|int|string $amount,
+        ?int $recordedByUserId = null,
+    ): array {
+        $pricePaise = self::paise($amount);
+
+        return Database::transaction(function (PDO $pdo) use ($lotId, $teamId, $pricePaise, $recordedByUserId): array {
+            $lot  = $this->lockLot($lotId);
+            $team = $this->lockTeam($teamId);
+
+            if ((int) $lot['tournament_id'] !== (int) $team['tournament_id']) {
+                throw new AuctionException(
+                    AuctionException::WRONG_TOURNAMENT,
+                    'That team is not part of this tournament.',
+                    [],
+                    403
+                );
+            }
+
+            if ($lot['status'] === 'sold') {
+                throw new AuctionException(
+                    AuctionException::ALREADY_SOLD,
+                    $lot['full_name'] . ' has already been sold. Undo that sale first if it was wrong.'
+                );
+            }
+
+            $basePaise = self::paise($lot['base_price']);
+
+            if ($pricePaise < $basePaise) {
+                throw new AuctionException(
+                    AuctionException::BID_TOO_LOW,
+                    'The price cannot be below the base price of ' . self::money($basePaise) . '.',
+                    ['base_price' => self::rupees($basePaise)]
+                );
+            }
+
+            $rules = $this->tournamentRules((int) $lot['tournament_id']);
+            $this->assertSquadHasRoom($team, $rules, (int) $lot['player_id']);
+
+            if (self::paise($team['purse_remaining']) < $pricePaise) {
+                throw new AuctionException(
+                    AuctionException::INSUFFICIENT_PURSE,
+                    $team['name'] . ' only has ' . self::money(self::paise($team['purse_remaining']))
+                        . ' left, so it cannot pay ' . self::money($pricePaise) . '.',
+                    ['purse_remaining' => $team['purse_remaining']]
+                );
+            }
+
+            $this->applySale($lot, $teamId, $pricePaise, $recordedByUserId);
+
+            $fresh    = $this->lockTeam($teamId);
+            $reserve  = $this->reserveRequired($fresh, $rules, 0, (int) $lot['tournament_id']);
+            $shortfall = $reserve - self::paise($fresh['purse_remaining']);
+
+            return [
+                'ok'         => true,
+                'outcome'    => 'sold',
+                'lot_id'     => $lotId,
+                'player_id'  => (int) $lot['player_id'],
+                'player'     => $lot['full_name'],
+                'team_id'    => $teamId,
+                'team'       => $team['name'],
+                'price'      => self::rupees($pricePaise),
+                'purse_left' => $fresh['purse_remaining'],
+                'squad_size' => (int) $fresh['players_bought'],
+                // Advice, not a refusal.
+                'warning'    => $shortfall > 0
+                    ? sprintf(
+                        '%s now has %s left, which is %s short of what a full squad of %d would cost at current base prices.',
+                        $fresh['name'],
+                        self::money(self::paise($fresh['purse_remaining'])),
+                        self::money($shortfall),
+                        (int) $rules['min_squad_size']
+                    )
+                    : null,
+            ];
+        });
+    }
+
+    /**
+     * Reverse a recorded sale.
+     *
+     * Typing a price by hand means mistyping one, so this is not an
+     * optional convenience. It puts back everything applySale() moved: the
+     * money, the squad counts, the player, and the lot — which returns to
+     * the queue so it can be recorded again.
+     *
+     * @return array<string,mixed>
+     */
+    public function undoSale(int $lotId, ?int $userId = null): array
+    {
+        return Database::transaction(function (PDO $pdo) use ($lotId, $userId): array {
+            $lot = $this->lockLot($lotId);
+
+            if ($lot['status'] !== 'sold') {
+                throw new AuctionException(
+                    AuctionException::NOT_SOLD,
+                    'That lot has not been sold, so there is nothing to undo.',
+                    ['status' => $lot['status']]
+                );
+            }
+
+            $sale = Database::one(
+                'SELECT sold_to_team_id, sold_price FROM auction_lots WHERE id = :lot',
+                [':lot' => $lotId]
+            );
+
+            $teamId = (int) $sale['sold_to_team_id'];
+            $team   = $this->lockTeam($teamId);
+            $price  = self::rupees(self::paise($sale['sold_price']));
+
+            // Money and counts first, so the team row is never left holding
+            // a player it no longer has.
+            Database::run(
+                'UPDATE teams
+                    SET purse_spent     = purse_spent - :price,
+                        players_bought  = GREATEST(players_bought - 1, 0),
+                        overseas_bought = GREATEST(CAST(overseas_bought AS SIGNED) - :overseas, 0)
+                  WHERE id = :team',
+                [':price' => $price, ':overseas' => (int) $lot['is_overseas'], ':team' => $teamId]
+            );
+
+            // chk_player_sold refuses a non-sold player that still carries a
+            // price, so status, team and price have to move together.
+            Database::run(
+                'UPDATE players
+                    SET status = :available, team_id = NULL, sold_price = NULL
+                  WHERE id = :player',
+                [':available' => 'available', ':player' => (int) $lot['player_id']]
+            );
+
+            Database::run(
+                'UPDATE auction_lots
+                    SET status = :queued, sold_to_team_id = NULL, sold_price = NULL,
+                        closed_at = NULL, closed_by_user_id = :user,
+                        current_bid = NULL, current_bidder_team_id = NULL,
+                        started_at = NULL, ends_at = NULL
+                  WHERE id = :lot',
+                [':queued' => 'queued', ':user' => $userId, ':lot' => $lotId]
+            );
+
+            Database::run(
+                'UPDATE auction_bids SET is_winning = 0 WHERE lot_id = :lot',
+                [':lot' => $lotId]
+            );
+
+            $fresh = $this->lockTeam($teamId);
+
+            return [
+                'ok'         => true,
+                'outcome'    => 'undone',
+                'lot_id'     => $lotId,
+                'player'     => $lot['full_name'],
+                'team'       => $team['name'],
+                'refunded'   => $price,
+                'purse_left' => $fresh['purse_remaining'],
+            ];
+        });
+    }
+
+    /**
+     * The four writes that make a sale. Shared by sell() and recordSale()
+     * so the two paths cannot drift apart.
+     *
+     * @param array<string,mixed> $lot
+     */
+    private function applySale(array $lot, int $teamId, int $pricePaise, ?int $userId): void
+    {
+        $priceRupees = self::rupees($pricePaise);
+        $lotId       = (int) $lot['id'];
+
+        Database::run(
+            'UPDATE auction_lots
+                SET status             = :sold,
+                    sold_to_team_id    = :team,
+                    sold_price         = :price,
+                    closed_at          = NOW(),
+                    closed_by_user_id  = :user
+              WHERE id = :lot',
+            [':sold' => 'sold', ':team' => $teamId, ':price' => $priceRupees,
+             ':user' => $userId, ':lot' => $lotId]
+        );
+
+        // players.status -> 'sold'. The chk_player_sold constraint refuses
+        // this row unless team_id is set and the price clears base price, so
+        // a half-applied sale cannot be written even by accident.
+        Database::run(
+            'UPDATE players
+                SET status     = :sold,
+                    team_id    = :team,
+                    sold_price = :price
+              WHERE id = :player',
+            [':sold' => 'sold', ':team' => $teamId, ':price' => $priceRupees,
+             ':player' => (int) $lot['player_id']]
+        );
+
+        // Debit the purse. purse_remaining is a generated column, so it
+        // follows automatically; chk_team_spent rejects an overdraft.
+        Database::run(
+            'UPDATE teams
+                SET purse_spent     = purse_spent + :price,
+                    players_bought  = players_bought + 1,
+                    overseas_bought = overseas_bought + :overseas
+              WHERE id = :team',
+            [':price' => $priceRupees, ':overseas' => (int) $lot['is_overseas'], ':team' => $teamId]
+        );
+
+        Database::run(
+            'UPDATE auction_bids SET is_winning = 1
+              WHERE lot_id = :lot AND team_id = :team AND bid_amount = :price',
+            [':lot' => $lotId, ':team' => $teamId, ':price' => $priceRupees]
+        );
+    }
+
+    /**
      * Close a lot with no winner. The player returns to the pool as 'unsold'
      * and can be re-listed in a later round.
      *
@@ -282,7 +488,9 @@ final class AuctionService
         return Database::transaction(function (PDO $pdo) use ($lotId, $closedByUserId): array {
             $lot = $this->lockLot($lotId);
 
-            if (!in_array($lot['status'], ['live', 'paused'], true)) {
+            // 'queued' is allowed too: with the auction called in the room,
+            // a player can be passed over without ever being opened here.
+            if (!in_array($lot['status'], ['live', 'paused', 'queued'], true)) {
                 throw new AuctionException(
                     AuctionException::LOT_NOT_LIVE,
                     'This lot has already been closed.',
@@ -603,5 +811,25 @@ final class AuctionService
     private static function rupees(int $paise): string
     {
         return number_format($paise / 100, 2, '.', '');
+    }
+
+    /**
+     * The same money, but for a human to read: ₹12,34,567.
+     *
+     * Indian digit grouping. A rejection an auctioneer reads out mid-lot
+     * should be in the units the room is speaking, not '1234567.00'.
+     */
+    private static function money(int $paise): string
+    {
+        $n     = (int) round($paise / 100);
+        $str   = (string) abs($n);
+        $last3 = substr($str, -3);
+        $rest  = substr($str, 0, -3);
+
+        if ($rest !== '') {
+            $last3 = preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', $rest) . ',' . $last3;
+        }
+
+        return ($n < 0 ? '-' : '') . '₹' . $last3;
     }
 }

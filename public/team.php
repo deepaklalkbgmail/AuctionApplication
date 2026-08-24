@@ -146,10 +146,13 @@ page_message($error);
             <div class="rounded-2xl border border-white/10 bg-white/[0.03] p-6">
                 <h2 class="text-[13px] font-bold uppercase tracking-wider text-slate-400">Purse</h2>
                 <p class="mt-3 text-3xl font-black tracking-tight text-emerald-400">
-                    ₹<?= e(number_format((float) $team['purse_remaining'] / 100000, 2)) ?><span class="ml-1 text-base font-bold text-slate-500">L</span>
+                    <?= e(rupees($team['purse_remaining'])) ?>
                 </p>
                 <p class="mt-1 text-[12px] text-slate-500">
-                    of ₹<?= e(number_format((float) $team['purse_total'] / 100000, 2)) ?> L remaining
+                    left of <?= e(rupees($team['purse_total'])) ?>
+                    <?php if ((float) $team['purse_spent'] > 0): ?>
+                        · <?= e(rupees($team['purse_spent'])) ?> spent
+                    <?php endif; ?>
                 </p>
                 <p class="mt-3 text-[12px] text-slate-400">
                     <?= (int) $team['players_bought'] ?> player<?= (int) $team['players_bought'] === 1 ? '' : 's' ?> bought
@@ -169,7 +172,7 @@ page_message($error);
                             <li class="flex items-center justify-between gap-3 py-2.5">
                                 <span class="text-[13px] font-semibold text-slate-200"><?= e((string) $player['full_name']) ?></span>
                                 <span class="shrink-0 text-[12px] font-bold text-emerald-400">
-                                    ₹<?= e(number_format((float) $player['sold_price'] / 100000, 2)) ?> L
+                                    <?= e(rupees($player['sold_price'])) ?>
                                 </span>
                             </li>
                         <?php endforeach; ?>

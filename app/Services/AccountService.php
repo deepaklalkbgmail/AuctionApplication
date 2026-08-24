@@ -534,9 +534,33 @@ final class AccountService
         return $code;
     }
 
-    /** A password that can be read down a phone line without confusion. */
+    /**
+     * A password that can be read down a phone line without confusion.
+     *
+     * It must also satisfy assertPasswordStrong(), which wants at least one
+     * letter and at least one digit. Drawing eight characters at random from
+     * an alphabet that is 23 letters and 8 digits produces an all-letter
+     * password about nine times in a hundred — so roughly one scorer account
+     * in eleven used to fail to be created, with the administrator told
+     * "Use at least one letter and one number" about a password they never
+     * chose. Planting one of each removes the possibility rather than
+     * retrying until the dice cooperate.
+     */
     public function readablePassword(): string
     {
-        return self::generateCode(4) . '-' . self::generateCode(4);
+        $letters = 'ABCDEFGHJKMNPQRSTUVWXYZ';
+        $digits  = '23456789';
+
+        $chars = str_split(self::generateCode(4) . self::generateCode(4));
+
+        // Two distinct positions, so neither planted character overwrites
+        // the other.
+        $forLetter = random_int(0, 3);
+        $forDigit  = random_int(4, 7);
+
+        $chars[$forLetter] = $letters[random_int(0, strlen($letters) - 1)];
+        $chars[$forDigit]  = $digits[random_int(0, strlen($digits) - 1)];
+
+        return implode('', array_slice($chars, 0, 4)) . '-' . implode('', array_slice($chars, 4));
     }
 }

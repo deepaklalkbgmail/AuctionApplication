@@ -334,8 +334,14 @@ locked out.
 
 ### 6.6 Running the auction
 
-Sign in as the administrator and open the auction board. Your control rail
-sits under the player card.
+> **The auction is called aloud in the room.** The application is the record
+> of it, not the bidding floor. Open **Administration → Auction**: for each
+> player, choose the team and type the price that was called, then press
+> **Sold**. The purse board across the top is always visible, and every sale
+> has an **Undo** beside it.
+>
+> The live bidding board described below still works, for anyone who would
+> rather owners bid on screen — but the sheet is the supported method.
 
 | Button | Does | When |
 |--------|------|------|
@@ -858,8 +864,9 @@ undo are complete for one innings. The innings break, the second-innings
 target, the chase and the match result are not implemented. A match can be
 scored through the first innings and no further.
 
-**4. No sale undo.** Pressing **Sold** is final; correcting it needs a
-database edit.
+**4. No live on-screen bidding.** By design. The auction is called aloud in
+the room and recorded on **Administration → Auction**; the administrator
+types the price and the buying team. Every sale has an **Undo** beside it.
 
 **5. No email.** Approvals, rejections and issued passwords are not emailed —
 somebody has to tell the person. Every state is visible on their own screen

@@ -91,6 +91,11 @@ function playerRow(int $id): array
     return Database::one('SELECT * FROM players WHERE id = :id', [':id' => $id]) ?? [];
 }
 
+function lotRow(int $id): array
+{
+    return Database::one('SELECT * FROM auction_lots WHERE id = :id', [':id' => $id]) ?? [];
+}
+
 // ---------------------------------------------------------------------
 
 echo "\n\033[1mAuctionService integration tests\033[0m\n";
@@ -247,6 +252,106 @@ $state = $auction->liveState(1);
 is('live state exposes the open lot', (int) $state['lot']['lot_id'], 7);
 is('live state lists every team', count($state['teams']), 4);
 is('live state carries the bid feed', count($state['bids']) > 0, true);
+
+// =====================================================================
+//  Recording a sale called in the room
+//
+//  The auction is run aloud; the application is the record. These are the
+//  checks that survive that change, and the ones that do not.
+// =====================================================================
+
+resetDatabase();
+$auction = new AuctionService();
+
+section('Recording a sale by hand');
+
+// Lot 8 is queued — never opened here, because the room does the calling.
+is('the lot starts queued', lotRow(8)['status'], 'queued');
+
+$before = teamRow(3);
+
+$sale = $auction->recordSale(8, 3, '1900000', 1);
+is('the sale is recorded',            $sale['outcome'], 'sold');
+is('at the price that was called',    $sale['price'],   '1900000.00');
+is('to the named team',               $sale['team'],    'Coastal Kings');
+
+is('the lot is closed as sold',       lotRow(8)['status'], 'sold');
+is('carrying the price',              lotRow(8)['sold_price'], '1900000.00');
+is('and the buyer',                   (int) lotRow(8)['sold_to_team_id'], 3);
+
+$player = playerRow((int) lotRow(8)['player_id']);
+is('the player is sold',              $player['status'], 'sold');
+is('to that team',                    (int) $player['team_id'], 3);
+is('at that price',                   $player['sold_price'], '1900000.00');
+
+$after = teamRow(3);
+is('the purse is debited',
+    (float) $before['purse_remaining'] - (float) $after['purse_remaining'], 1900000.0);
+is('the squad count rises',
+    (int) $after['players_bought'], (int) $before['players_bought'] + 1);
+
+section('What a manual sale still refuses');
+
+rejects('a price below the base price', AuctionException::BID_TOO_LOW,
+    fn () => $auction->recordSale(9, 3, '100'));
+
+rejects('selling the same lot twice', AuctionException::ALREADY_SOLD,
+    fn () => $auction->recordSale(8, 3, '1900000'));
+
+rejects('more than the team can pay', AuctionException::INSUFFICIENT_PURSE,
+    fn () => $auction->recordSale(9, 3, '99000000'));
+
+rejects('a team from another tournament', AuctionException::TEAM_NOT_FOUND,
+    fn () => $auction->recordSale(9, 99, '1300000'));
+
+section('What it no longer refuses');
+
+// Snapshot the buyer before the sale, so the undo below has something
+// truthful to compare against.
+$teamBefore = teamRow(4);
+
+// The room calls whatever the room calls. An increment ladder is a rule for
+// a bidding UI, not for a record of what happened.
+$odd = $auction->recordSale(9, 4, '1234567', 1);
+is('a price off the increment ladder is accepted', $odd['price'], '1234567.00');
+
+// No countdown, no leader, so no "you already lead" and no expiry.
+is('a queued lot needs no opening first', lotRow(9)['status'], 'sold');
+
+section('Undoing a sale');
+
+$undo = $auction->undoSale(9, 1);
+
+is('the sale is reversed',        $undo['outcome'], 'undone');
+is('the money is refunded',       $undo['refunded'], '1234567.00');
+is('the lot returns to the queue', lotRow(9)['status'], 'queued');
+is('with no price on it',          lotRow(9)['sold_price'], null);
+is('and no buyer',                 lotRow(9)['sold_to_team_id'], null);
+
+$p9 = playerRow((int) lotRow(9)['player_id']);
+is('the player is available again', $p9['status'], 'available');
+is('with no team',                  $p9['team_id'], null);
+is('and no price',                  $p9['sold_price'], null);
+
+$teamAfter = teamRow(4);
+is('the purse is restored',
+    $teamAfter['purse_remaining'], $teamBefore['purse_remaining']);
+is('the squad count goes back',
+    (int) $teamAfter['players_bought'], (int) $teamBefore['players_bought']);
+
+rejects('undoing something that was never sold', AuctionException::NOT_SOLD,
+    fn () => $auction->undoSale(9));
+
+// The corrected price can now be recorded.
+$fixed = $auction->recordSale(9, 4, '1300000', 1);
+is('and the lot can be sold again at the right price', $fixed['price'], '1300000.00');
+
+section('Passing over a player without opening a lot');
+
+$passed_over = $auction->markUnsold(10, 1);
+is('a queued lot can be marked unsold', $passed_over['outcome'], 'unsold');
+is('the player returns to the pool',
+    playerRow((int) lotRow(10)['player_id'])['status'], 'unsold');
 
 // ---------------------------------------------------------------------
 

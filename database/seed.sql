@@ -29,14 +29,17 @@ VALUES
     (4, 1, 'Desert Falcons',  'DF',  '#a855f7', 'Eden Gardens', 10000000.00, 7350000.00, 8, 3);
 
 -- --------------------------------------------------------------------- users
-INSERT INTO `users` (`name`, `email`, `password_hash`, `role`, `team_id`) VALUES
-    ('Arjun Mehta',   'admin@cricauction.test',  @PW, 'admin',      NULL),
-    ('Priya Nair',    'scorer@cricauction.test', @PW, 'scorer',     NULL),
-    ('Guest Viewer',  'viewer@cricauction.test', @PW, 'viewer',     NULL),
-    ('Rahul Verma',   'owner.ts@cricauction.test', @PW, 'team_owner', 1),
-    ('Sneha Iyer',    'owner.rc@cricauction.test', @PW, 'team_owner', 2),
-    ('Imran Qureshi', 'owner.ck@cricauction.test', @PW, 'team_owner', 3),
-    ('Meera Kapoor',  'owner.df@cricauction.test', @PW, 'team_owner', 4);
+-- Usernames are set here too. Sign-in takes a username or an email, and a
+-- seeded database that only answers to an email quietly contradicts every
+-- screen and guide that says either will do.
+INSERT INTO `users` (`username`, `name`, `email`, `password_hash`, `role`, `status`, `team_id`) VALUES
+    ('admin',    'Arjun Mehta',   'admin@cricauction.test',    @PW, 'admin',      'approved', NULL),
+    ('scorer',   'Priya Nair',    'scorer@cricauction.test',   @PW, 'scorer',     'approved', NULL),
+    ('viewer',   'Guest Viewer',  'viewer@cricauction.test',   @PW, 'viewer',     'approved', NULL),
+    ('owner.ts', 'Rahul Verma',   'owner.ts@cricauction.test', @PW, 'team_owner', 'approved', 1),
+    ('owner.rc', 'Sneha Iyer',    'owner.rc@cricauction.test', @PW, 'team_owner', 'approved', 2),
+    ('owner.ck', 'Imran Qureshi', 'owner.ck@cricauction.test', @PW, 'team_owner', 'approved', 3),
+    ('owner.df', 'Meera Kapoor',  'owner.df@cricauction.test', @PW, 'team_owner', 'approved', 4);
 
 -- ------------------------------------------------------------------- players
 INSERT INTO `players`

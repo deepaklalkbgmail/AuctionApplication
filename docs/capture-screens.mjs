@@ -176,6 +176,7 @@ async function shot(page, path, name, { full = false, settle = 400 } = {}) {
     await shot(page, '/admin/applications.php', 'admin-applications', { full: true });
     await page.setViewportSize({ width: 1180, height: 1080 });
     await shot(page, '/admin/teams.php', 'admin-teams');
+    await shot(page, '/admin/auction.php', 'admin-auction');
     await page.setViewportSize({ width: 1180, height: 820 });
     await ctx.close();
 }
