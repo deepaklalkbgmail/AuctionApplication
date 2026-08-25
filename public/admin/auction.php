@@ -23,6 +23,7 @@ declare(strict_types=1);
 
 require_once dirname(dirname(__DIR__)) . '/config/config.php';
 require_once BASE_PATH . '/app/Views/layouts/shell.php';
+require_once BASE_PATH . '/app/Views/partials/player_card.php';
 
 use App\Core\Auth;
 use App\Core\Security;
@@ -39,6 +40,22 @@ $error       = null;
 $warning     = null;
 
 $all = $tournaments->listTournaments();
+
+/**
+ * How the pool is ordered. Marquee first is the one that matters: the big
+ * names are called early, while every purse is still full, and the running
+ * order they were approved in is rarely that order.
+ *
+ * Sorting only changes what this page shows. It does not renumber the lots,
+ * so nothing here can disturb a running auction. Declared before the POST
+ * handler because that validates against it too.
+ */
+const SORTS = [
+    'lot'   => 'Lot order',
+    'set'   => 'Marquee first',
+    'price' => 'Base price, highest',
+    'name'  => 'Name',
+];
 
 $links = [
     ['href' => 'index.php',        'label' => 'Overview'],
@@ -124,8 +141,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     break;
             }
 
-            header('Location: auction.php?tournament=' . $tournamentId
-                 . (isset($_POST['q']) && $_POST['q'] !== '' ? '&q=' . urlencode((string) $_POST['q']) : ''));
+            // Come back to the same view: same tournament, same search, and
+            // the same running order. Being thrown back to lot order after
+            // every sale would make sorting useless.
+            $back = ['tournament' => $tournamentId];
+
+            if (($_POST['q'] ?? '') !== '') {
+                $back['q'] = (string) $_POST['q'];
+            }
+
+            if (isset($_POST['sort']) && $_POST['sort'] !== 'lot' && isset(SORTS[$_POST['sort']])) {
+                $back['sort'] = (string) $_POST['sort'];
+            }
+
+            header('Location: auction.php?' . http_build_query($back));
             exit;
         } catch (AuctionException $e) {
             $error = $e->getMessage();
@@ -147,8 +176,10 @@ $teams = Database::all(
     [':t' => $tournamentId]
 );
 
+$sort = isset($_GET['sort']) && isset(SORTS[$_GET['sort']]) ? (string) $_GET['sort'] : 'lot';
+
 /** @return array<int,array<string,mixed>> */
-function lotsWithStatus(int $tournamentId, array $statuses, string $search): array
+function lotsWithStatus(int $tournamentId, array $statuses, string $search, string $sort = 'lot'): array
 {
     $in = implode(',', array_map(static fn ($i) => ':s' . $i, array_keys($statuses)));
     $params = [':t' => $tournamentId];
@@ -164,28 +195,60 @@ function lotsWithStatus(int $tournamentId, array $statuses, string $search): arr
         $params[':q'] = '%' . $search . '%';
     }
 
+    // Chosen from a fixed list above, never from what arrived in the query
+    // string, so this cannot become an injection point.
+    $order = match ($sort) {
+        'set'   => "CASE WHEN p.auction_set IS NULL OR p.auction_set = '' THEN 2
+                         WHEN LOWER(p.auction_set) = 'marquee'           THEN 0
+                         ELSE 1 END, p.auction_set, l.lot_order",
+        'price' => 'l.base_price DESC, l.lot_order',
+        'name'  => 'p.full_name, l.lot_order',
+        default => 'l.lot_order, p.full_name',
+    };
+
     return Database::all(
         "SELECT l.id AS lot_id, l.status, l.base_price, l.sold_price, l.lot_order,
-                p.id AS player_id, p.full_name, p.role, p.is_overseas, p.auction_set,
-                p.photo_url, p.country,
+                p.id AS player_id, p.user_id, p.full_name, p.display_name,
+                p.role, p.batting_style, p.bowling_style,
+                p.is_overseas, p.is_capped, p.auction_set, p.photo_url, p.country,
+                p.career_matches, p.career_runs, p.career_wickets, p.strike_rate, p.economy,
+                u.phone, u.email, u.address,
                 t.name AS team_name, t.short_name AS team_short
            FROM auction_lots l
            JOIN players p ON p.id = l.player_id
+      LEFT JOIN users   u ON u.id = p.user_id
       LEFT JOIN teams   t ON t.id = l.sold_to_team_id
           WHERE l.tournament_id = :t AND l.status IN ({$in}){$like}
-       ORDER BY l.lot_order, p.full_name",
+       ORDER BY {$order}",
         $params
     );
 }
 
-$toCall = lotsWithStatus($tournamentId, ['queued', 'live', 'paused'], $search);
+$toCall = lotsWithStatus($tournamentId, ['queued', 'live', 'paused'], $search, $sort);
 $sold   = lotsWithStatus($tournamentId, ['sold'], $search);
 $unsold = lotsWithStatus($tournamentId, ['unsold'], $search);
+
+/** Keeps the tournament, search and sort together in every link on the page. */
+function sheet_url(int $tournamentId, string $search, string $sort): string
+{
+    $query = ['tournament' => $tournamentId];
+
+    if ($search !== '') {
+        $query['q'] = $search;
+    }
+
+    if ($sort !== 'lot') {
+        $query['sort'] = $sort;
+    }
+
+    return 'auction.php?' . http_build_query($query);
+}
 
 $spent  = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $teams));
 
 page_head('Auction', '../', $links);
 page_message($error);
+player_card_styles();
 ?>
 
 <?php if ($warning !== null): ?>
@@ -195,7 +258,15 @@ page_message($error);
 <?php endif; ?>
 
 <div class="flex flex-wrap items-baseline justify-between gap-3">
-    <h1 class="text-2xl font-extrabold tracking-tight text-white">Auction</h1>
+    <div>
+        <h1 class="text-2xl font-extrabold tracking-tight text-white">Auction</h1>
+        <?php /* Which tournament, always — the switcher below only appears
+                 when there is more than one, so without this an auctioneer
+                 with a single tournament is never told what they are in. */ ?>
+        <p class="mt-0.5 text-[13px] font-semibold text-slate-400">
+            <?= e((string) $tournament['name']) ?> · <?= e((string) $tournament['season_year']) ?>
+        </p>
+    </div>
     <div class="flex flex-wrap items-baseline gap-4">
         <p class="text-[13px] text-slate-400">
             Call the lot in the room, then record what it went for.
@@ -275,6 +346,7 @@ page_message($error);
 <!-- -------------------------------------------------------------- search -->
 <form method="get" class="mt-7 flex flex-wrap items-end gap-3">
     <input type="hidden" name="tournament" value="<?= $tournamentId ?>">
+    <input type="hidden" name="sort" value="<?= e($sort) ?>">
     <div class="min-w-[14rem] flex-1">
         <label for="f_q" class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
             Find a player
@@ -287,15 +359,32 @@ page_message($error);
         Search
     </button>
     <?php if ($search !== ''): ?>
-        <a href="auction.php?tournament=<?= $tournamentId ?>" class="mb-3 text-[13px] font-semibold text-slate-400 hover:text-slate-200">Clear</a>
+        <a href="<?= e(sheet_url($tournamentId, '', $sort)) ?>" class="mb-3 text-[13px] font-semibold text-slate-400 hover:text-slate-200">Clear</a>
     <?php endif; ?>
 </form>
 
 <!-- ====================================================== STILL TO CALL -->
 <section class="mt-6">
-    <h2 class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
-        Still to call <span class="ml-1 text-slate-600">(<?= count($toCall) ?>)</span>
-    </h2>
+    <div class="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">
+            Still to call <span class="ml-1 text-slate-600">(<?= count($toCall) ?>)</span>
+        </h2>
+
+        <?php /* Marquee first is what an auctioneer actually wants: the big
+                 names go early, while every purse is still full. */ ?>
+        <div class="flex flex-wrap items-center gap-1.5">
+            <span class="mr-1 text-[11px] font-bold uppercase tracking-wider text-slate-500">Order by</span>
+            <?php foreach (SORTS as $key => $label): ?>
+                <a href="<?= e(sheet_url($tournamentId, $search, $key)) ?>"
+                   class="whitespace-nowrap rounded-lg px-2.5 py-1 text-[12px] font-semibold transition <?=
+                       $key === $sort
+                           ? 'bg-emerald-500/15 text-emerald-300'
+                           : 'border border-white/10 text-slate-400 hover:bg-white/5' ?>">
+                    <?= e($label) ?>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    </div>
 
     <?php if ($toCall === []): ?>
         <p class="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-[13px] text-slate-500">
@@ -311,8 +400,9 @@ page_message($error);
                         <span class="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/5 font-mono text-[12px] font-bold text-slate-400">
                             <?= (int) $lot['lot_order'] ?>
                         </span>
+                        <?= player_card_thumb($lot, '../') ?>
                         <div class="min-w-[10rem] flex-1">
-                            <p class="text-[15px] font-extrabold text-white"><?= e((string) $lot['full_name']) ?></p>
+                            <p class="text-[15px] font-extrabold text-white"><?= player_card_link($lot) ?></p>
                             <p class="text-[11px] text-slate-500">
                                 <?= e(str_replace('_', ' ', (string) $lot['role'])) ?>
                                 · base <?= rupees($lot['base_price']) ?>
@@ -324,6 +414,8 @@ page_message($error);
                         </div>
                     </div>
 
+                    <?php player_card($lot, '../'); ?>
+
                     <div class="mt-3 flex flex-wrap items-end gap-3 border-t border-white/5 pt-3">
                         <form method="post" class="flex flex-wrap items-end gap-3">
                             <?= csrf_field() ?>
@@ -331,6 +423,7 @@ page_message($error);
                             <input type="hidden" name="lot_id" value="<?= (int) $lot['lot_id'] ?>">
                             <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
                             <input type="hidden" name="q" value="<?= e($search) ?>">
+                            <input type="hidden" name="sort" value="<?= e($sort) ?>">
 
                             <div>
                                 <label for="team_<?= (int) $lot['lot_id'] ?>"
@@ -368,6 +461,7 @@ page_message($error);
                             <input type="hidden" name="lot_id" value="<?= (int) $lot['lot_id'] ?>">
                             <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
                             <input type="hidden" name="q" value="<?= e($search) ?>">
+                            <input type="hidden" name="sort" value="<?= e($sort) ?>">
                             <button type="submit"
                                     class="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-[13px] font-bold text-slate-300 hover:bg-white/10">
                                 Unsold
@@ -401,8 +495,9 @@ page_message($error);
                     <?php foreach ($sold as $lot): ?>
                         <tr class="border-b border-white/5 last:border-0">
                             <td class="px-4 py-2.5">
-                                <span class="text-[13px] font-bold text-white"><?= e((string) $lot['full_name']) ?></span>
+                                <span class="text-[13px] font-bold text-white"><?= player_card_link($lot) ?></span>
                                 <span class="ml-1.5 text-[11px] text-slate-500"><?= e(str_replace('_', ' ', (string) $lot['role'])) ?></span>
+                                <?php player_card($lot, '../'); ?>
                             </td>
                             <td class="px-4 py-2.5 text-[13px] text-slate-300"><?= e((string) $lot['team_name']) ?></td>
                             <td class="px-4 py-2.5 text-right font-mono text-[13px] font-bold text-emerald-400">
@@ -415,6 +510,7 @@ page_message($error);
                                     <input type="hidden" name="lot_id" value="<?= (int) $lot['lot_id'] ?>">
                                     <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
                                     <input type="hidden" name="q" value="<?= e($search) ?>">
+                            <input type="hidden" name="sort" value="<?= e($sort) ?>">
                                     <button type="submit"
                                             class="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-bold text-slate-400 transition hover:border-rose-400/30 hover:bg-rose-500/10 hover:text-rose-300">
                                         Undo
@@ -444,18 +540,25 @@ page_message($error);
 
         <div class="mt-3 flex flex-wrap gap-2">
             <?php foreach ($unsold as $lot): ?>
-                <form method="post" class="inline">
-                    <?= csrf_field() ?>
-                    <input type="hidden" name="action" value="relist">
-                    <input type="hidden" name="lot_id" value="<?= (int) $lot['lot_id'] ?>">
-                    <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
-                    <input type="hidden" name="q" value="<?= e($search) ?>">
-                    <button type="submit"
-                            class="rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[13px] font-semibold text-slate-300 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-emerald-300">
-                        <?= e((string) $lot['full_name']) ?>
-                        <span class="ml-1 text-[11px] text-slate-500">re-list</span>
-                    </button>
-                </form>
+                <?php /* The name opens the card — they will be called again
+                         later, and knowing who they are still matters. */ ?>
+                <span class="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/[0.03] py-1.5 pl-2 pr-1.5">
+                    <?= player_card_thumb($lot, '../') ?>
+                    <span class="text-[13px] font-semibold"><?= player_card_link($lot) ?></span>
+                    <form method="post" class="inline">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="action" value="relist">
+                        <input type="hidden" name="lot_id" value="<?= (int) $lot['lot_id'] ?>">
+                        <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
+                        <input type="hidden" name="q" value="<?= e($search) ?>">
+                        <input type="hidden" name="sort" value="<?= e($sort) ?>">
+                        <button type="submit"
+                                class="rounded-lg border border-white/10 px-2.5 py-1 text-[11px] font-bold text-slate-400 transition hover:border-emerald-400/30 hover:bg-emerald-500/10 hover:text-emerald-300">
+                            re-list
+                        </button>
+                    </form>
+                </span>
+                <?php player_card($lot, '../'); ?>
             <?php endforeach; ?>
         </div>
     </section>
