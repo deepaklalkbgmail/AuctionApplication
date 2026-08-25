@@ -163,19 +163,51 @@ if ($state === null) {
 
         if ($boardLots > 0) {
             $boardTournament = Database::one(
-                'SELECT id, name, season_year FROM tournaments WHERE id = :t',
+                'SELECT id, name, season_year, max_squad_size, max_overseas
+                   FROM tournaments WHERE id = :t',
                 [':t' => $TOURNAMENT_ID]
             );
 
             $boardTeams = Database::all(
-                'SELECT id, name, short_name, primary_color, purse_total, purse_spent,
-                        purse_remaining, players_bought
+                'SELECT id, name, short_name, primary_color, home_venue,
+                        purse_total, purse_spent, purse_remaining,
+                        players_bought, overseas_bought
                    FROM teams WHERE tournament_id = :t ORDER BY purse_remaining DESC',
                 [':t' => $TOURNAMENT_ID]
             );
 
+            // Who owns each team, and who they have bought. Two queries for
+            // the whole board rather than two per team: a spectator screen
+            // reloads itself, and a query count that grows with the number
+            // of teams would grow with every refresh as well.
+            $boardOwners = [];
+
+            foreach (Database::all(
+                "SELECT u.team_id, u.name
+                   FROM users u
+                   JOIN teams t ON t.id = u.team_id
+                  WHERE t.tournament_id = :t AND u.role = 'team_owner'",
+                [':t' => $TOURNAMENT_ID]
+            ) as $row) {
+                $boardOwners[(int) $row['team_id']] = (string) $row['name'];
+            }
+
+            $boardSquads = [];
+
+            foreach (Database::all(
+                "SELECT l.sold_to_team_id AS team_id, l.sold_price,
+                        p.full_name, p.role, p.is_overseas
+                   FROM auction_lots l
+                   JOIN players p ON p.id = l.player_id
+                  WHERE l.tournament_id = :t AND l.status = 'sold'
+               ORDER BY l.sold_price DESC, p.full_name",
+                [':t' => $TOURNAMENT_ID]
+            ) as $row) {
+                $boardSquads[(int) $row['team_id']][] = $row;
+            }
+
             $boardSold = Database::all(
-                "SELECT p.full_name, p.role, l.sold_price, t.name AS team_name
+                "SELECT p.full_name, p.role, l.sold_price, t.id AS team_id, t.name AS team_name
                    FROM auction_lots l
                    JOIN players p ON p.id = l.player_id
                    JOIN teams   t ON t.id = l.sold_to_team_id

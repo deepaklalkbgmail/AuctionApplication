@@ -24,6 +24,8 @@ declare(strict_types=1);
  *    $boardTeams       teams with purses
  *    $boardSold        closed lots, newest first
  *    $boardToCall      lots still queued
+ *    $boardOwners      team id => owner's name
+ *    $boardSquads      team id => the players they have bought
  *    $boardIsAdmin     whether to offer the admin's links
  */
 
@@ -33,6 +35,8 @@ declare(strict_types=1);
 /** @var array<int,array<string,mixed>> $boardToCall */
 
 $boardIsAdmin ??= false;
+$boardOwners  ??= [];
+$boardSquads  ??= [];
 
 if (!function_exists('board_rupees')) {
     /** ₹12,34,567 — Indian grouping, as the room says it. */
@@ -57,6 +61,13 @@ if (!function_exists('board_rupees')) {
 
 $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $boardTeams));
 
+$boardLimits = [
+    'max_squad_size' => (int) ($boardTournament['max_squad_size'] ?? 15),
+    'max_overseas'   => (int) ($boardTournament['max_overseas'] ?? 4),
+];
+
+require_once __DIR__ . '/team_card.php';
+
 ?>
 <!DOCTYPE html>
 <html lang="en" class="dark">
@@ -67,6 +78,13 @@ $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $
     <title>Auction board — <?= e(APP_NAME) ?></title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%2322c55e%22%2F%3E%3Cpath%20d%3D%22M8.5%2024%2019%2013.5M17.5%206.5%2025.5%2014.5%2021.5%2018.5%2013.5%2010.5z%22%20stroke%3D%22%23020617%22%20stroke-width%3D%222.6%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%2F%3E%3Ccircle%20cx%3D%228%22%20cy%3D%2224.5%22%20r%3D%222.3%22%20fill%3D%22%23020617%22%2F%3E%3C%2Fsvg%3E">
     <link rel="stylesheet" href="assets/css/app.css">
+    <?php team_card_styles(); ?>
+
+    <?php /* Refreshes the figures in place every few seconds. External, not
+             inline, because the deployed policy allows no inline script; and
+             an enhancement, not a requirement — with it blocked or broken the
+             page is exactly what it was before, a board you reload. */ ?>
+    <script defer src="assets/js/board-live.js"></script>
 </head>
 
 <body class="bg-arena min-h-screen font-sans text-slate-200">
@@ -104,7 +122,7 @@ $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $
     </div>
 </header>
 
-<main class="mx-auto max-w-5xl px-4 py-7">
+<main class="mx-auto max-w-5xl px-4 py-7" id="board">
 
     <div class="flex flex-wrap items-baseline justify-between gap-3">
         <h1 class="text-2xl font-extrabold tracking-tight text-white">Auction board</h1>
@@ -114,12 +132,30 @@ $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $
         </p>
     </div>
     <p class="mt-1.5 text-[12px] text-slate-500">
-        The auction is called in the room. This updates as each result is recorded — reload to see the latest.
+        <?php /* The honest message is the one for a page with no scripting.
+                 board-live.js replaces it the moment it starts, so nobody is
+                 ever told the board is updating itself when it is not. */ ?>
+        The auction is called in the room and each result recorded here.
+        <span data-board-status>Reload to see the latest.</span>
     </p>
+
+    <?php /* Once nothing is left to call, this page stops being a running
+             commentary and becomes the record everybody comes back to. Say
+             so, rather than leaving them to infer it from an absence. */ ?>
+    <?php if ($boardToCall === [] && $boardSold !== []): ?>
+        <p class="mt-5 rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.07] px-4 py-3 text-[13px] font-semibold text-emerald-200">
+            The auction is finished. These are the final squads — click any team to see it.
+        </p>
+    <?php endif; ?>
 
     <!-- ---------------------------------------------------------- purses -->
     <section class="mt-6">
-        <h2 class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Purse board</h2>
+        <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 class="text-[11px] font-black uppercase tracking-[0.16em] text-slate-400">Purse board</h2>
+            <?php if ($boardTeams !== []): ?>
+                <p class="text-[11px] text-slate-500">Click a team for its owner and squad</p>
+            <?php endif; ?>
+        </div>
 
         <?php if ($boardTeams === []): ?>
             <p class="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-6 text-center text-[13px] text-slate-500">
@@ -138,7 +174,7 @@ $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $
                                   style="background: <?= e((string) $team['primary_color']) ?>">
                                 <?= e((string) $team['short_name']) ?>
                             </span>
-                            <p class="min-w-0 flex-1 truncate text-[13px] font-bold text-white"><?= e((string) $team['name']) ?></p>
+                            <p class="min-w-0 flex-1 truncate text-[13px] font-bold text-white"><?= team_card_link($team) ?></p>
                             <p class="shrink-0 text-base font-black text-emerald-400"><?= e(board_rupees($team['purse_remaining'])) ?></p>
                         </div>
                         <div class="mt-2.5 h-1.5 overflow-hidden rounded-full bg-white/10">
@@ -149,6 +185,13 @@ $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $
                             <span>spent <?= e(board_rupees($team['purse_spent'])) ?></span>
                         </p>
                     </div>
+
+                    <?php team_card(
+                        $team,
+                        $boardOwners[(int) $team['id']] ?? null,
+                        $boardSquads[(int) $team['id']] ?? [],
+                        $boardLimits
+                    ); ?>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
@@ -181,7 +224,9 @@ $boardSpent = array_sum(array_map(static fn ($t) => (float) $t['purse_spent'], $
                                     <span class="text-[13px] font-bold text-white"><?= e((string) $row['full_name']) ?></span>
                                     <span class="ml-1.5 text-[11px] text-slate-500"><?= e(str_replace('_', ' ', (string) $row['role'])) ?></span>
                                 </td>
-                                <td class="px-4 py-2.5 text-[13px] text-slate-300"><?= e((string) $row['team_name']) ?></td>
+                                <td class="px-4 py-2.5 text-[13px] text-slate-300">
+                                    <?= team_card_link(['id' => $row['team_id'], 'name' => $row['team_name']]) ?>
+                                </td>
                                 <td class="px-4 py-2.5 text-right font-mono text-[13px] font-bold text-emerald-400">
                                     <?= e(board_rupees($row['sold_price'])) ?>
                                 </td>

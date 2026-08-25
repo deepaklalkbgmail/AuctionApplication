@@ -438,7 +438,82 @@ is('a signed-out visitor is not asked to sign in first',
 is('and gets the purse board with it',
     str_contains($html, 'Purse board'), true);
 
+// ---------------------------------------------------------------------
+//  Clicking a team on the board
+//
+//  A spectator's page, so everything here is asserted against the HTML a
+//  spectator is actually served, signed out, in its own process.
+// ---------------------------------------------------------------------
+
+section('The team card on the board');
+
+Database::run(
+    "INSERT INTO teams (tournament_id, name, short_name, primary_color, purse_total)
+     VALUES (:t, 'Board Titans', 'BDT', '#22c55e', 10000000.00)",
+    [':t' => $second]
+);
+$boardTeam = Database::lastInsertId();
+
+Database::run(
+    "INSERT INTO users (username, name, email, password_hash, role, status, team_id)
+     VALUES ('board.owner', 'Board Owner', 'board.owner@t.test', :h, 'team_owner', 'approved', :team)",
+    [':h' => password_hash('Passw0rd!', PASSWORD_DEFAULT), ':team' => $boardTeam]
+);
+
+$boardLot = (int) Database::scalar(
+    'SELECT id FROM auction_lots WHERE tournament_id = :t ORDER BY lot_order LIMIT 1',
+    [':t' => $second]
+);
+
+$auction->recordSale($boardLot, $boardTeam, '450000', 1);
+
+$html = (string) shell_exec('php ' . escapeshellarg(BASE_PATH . '/public/auction.php') . ' 2>&1');
+
+is('the team name is a link to its card',
+    str_contains($html, 'href="#team-' . $boardTeam . '" class="tc-name"'), true);
+is('the card is on the page', str_contains($html, 'id="team-' . $boardTeam . '"'), true);
+is('it names the owner', str_contains($html, 'Owner: Board Owner'), true);
+is('it lists who they bought', str_contains($html, 'Late Arrival'), true);
+is('with what kind of player they are', str_contains($html, '>Batsman</td>'), true);
+is('and what they cost', str_contains($html, '₹4,50,000'), true);
+is('it shows what is left in the purse', str_contains($html, '₹95,50,000'), true);
+is('and how many slots are still open', str_contains($html, 'slots left'), true);
+is('the team is clickable from the sold row too',
+    substr_count($html, 'href="#team-' . $boardTeam . '"') >= 2, true);
+is('a card is hidden until it is asked for',
+    str_contains($html, '.tc-modal{display:none}'), true);
+
+/* The live refresh replaces the panel under an open card, which drops the
+   browser's :target. The class is how the card survives that; if this rule
+   is ever lost, a card open on a spectator's screen vanishes mid-auction. */
+is('and the rule that keeps an open card open through a refresh is there',
+    str_contains($html, '.tc-modal.is-open{display:grid'), true);
+is('the board asks for the live refresh script',
+    str_contains($html, 'assets/js/board-live.js'), true);
+is('and says plainly what to do if it never arrives',
+    str_contains($html, 'Reload to see the latest.'), true);
+
+/* What board-live.js does, done here: fetch the same page again and see
+   the sale that happened in between. */
+$before  = substr_count($html, 'class="tc-squad"');
+$secondLot = (int) Database::scalar(
+    "SELECT id FROM auction_lots WHERE tournament_id = :t AND status = 'queued' ORDER BY lot_order LIMIT 1",
+    [':t' => $second]
+);
+
+if ($secondLot > 0) {
+    $auction->recordSale($secondLot, $boardTeam, '300000', 1);
+}
+
+$refetched = (string) shell_exec('php ' . escapeshellarg(BASE_PATH . '/public/auction.php') . ' 2>&1');
+
+is('refetching the page picks the next sale up',
+    str_contains($refetched, '₹3,00,000'), $secondLot > 0);
+is('and the purse on the card has moved',
+    str_contains($refetched, '₹92,50,000'), $secondLot > 0);
+
 /* With no tournament at all it must say so, not invent one. */
+Database::run('DELETE FROM users WHERE team_id IS NOT NULL');
 Database::run('DELETE FROM tournaments');
 is('an empty install resolves to no tournament',
     $tournaments->currentAuctionId(), null);
