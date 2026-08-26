@@ -78,11 +78,18 @@ SELECT p.id                            AS player_id,
    not a digit thrown away, so it finds the player whether they typed
    7798093786, +91 77980 93786 or 077980-93786.
 
-   base_price is in rupees, whole numbers: 500000 is five lakh.
+   base_price is in RUPEES, and it is the whole figure — not lakhs, not
+   thousands:
+
+       5000     five thousand
+       200000   two lakh
+       500000   five lakh
+
+   It must be greater than zero; the database refuses 0 outright.
    --------------------------------------------------------------------- */
 SET @mobile := '7798093786';
 SET @code   := 'JFG24YH2';
-SET @base   := 500000;
+SET @base   := 5000;
 SET @set    := 'Marquee';
 
 
