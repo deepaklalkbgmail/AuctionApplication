@@ -52,41 +52,58 @@ set up in the database and adds 20 minutes.
 |---|---------|---------------|---|
 | 0.1 | phpMyAdmin → click **`deamco_APL` in the left sidebar** → **Export** → **Go** | A `.sql` file downloads. Keep it | ☐ |
 | 0.2 | With `deamco_APL` still selected, open the **SQL** tab. Do **not** open SQL from the server level — nothing works keyed on a database that is not selected | The SQL box appears with the database name shown above it | ☐ |
-| 0.3 | Import `database/reset.sql`. Use **Import → Choose File** rather than pasting | "Your SQL query has been executed successfully" | ☐ |
+| 0.3 | Import `database/test_reset.sql`. Use **Import → Choose File** rather than pasting | Every count reads `0`, and the last row reads `admin  /  admin` | ☐ |
 | 0.4 | Run: `SELECT COUNT(*) FROM users;` | `1` | ☐ |
 | 0.5 | Run: `SELECT COUNT(*) FROM tournaments;` and the same for `teams`, `players`, `auction_lots` | `0` every time | ☐ |
 | 0.6 | Open `https://deam.co.in/APL/` in a signed-out browser | The landing page, five role cards, a **Register** button | ☐ |
 | 0.7 | Open `https://deam.co.in/APL/auction.php` | **"No auction is running"** — correct for an empty database, not a fault | ☐ |
 
+> **Which reset file.** `test_reset.sql` is the one for testing: it leaves
+> **admin / admin**, the same two words every time, and does not make you
+> change the password before you can reach a screen. `reset.sql` is the one
+> for going live — it issues a temporary password and forces a change at the
+> first sign-in. Run that one, or change the password by hand, before the
+> tournament is real.
+>
 > **Do not run `schema.sql`.** It drops every table and it contains
 > `USE cric_auction`, so it will not even go into the database you think it
-> is going into. `reset.sql` is the one that empties without destroying.
+> is going into. Both reset files empty without destroying.
 
 ---
 
 ## Module 1 — The administrator account
 
-**Goal:** the published password cannot survive, and the admin identity is
-yours.
+**Goal:** the account works, it can be reached by username or email, and a
+weak password cannot be set through the application.
 
 | # | Do this | Should happen | ✓ |
 |---|---------|---------------|---|
-| 1.1 | Go to **Sign in**. Enter `admin` / `ChangeMe@2026` | You land on **Change password**, not on the hub | ☐ |
-| 1.2 | Try to navigate to `admin/index.php` directly | You are sent straight back to Change password | ☐ |
-| 1.3 | Current password `ChangeMe@2026`, new password `Testing2026` twice → **Change password** | "Password changed" | ☐ |
-| 1.4 | Press **Continue** | The administration hub, both queues showing **0** | ☐ |
-| 1.5 | **People** → **Edit details** on your own row. Set your real name and a real email → **Save details** | "Details saved." | ☐ |
-| 1.6 | Sign out, then sign in with your **new email address** instead of `admin` | Signs in. Username *or* email both work | ☐ |
+| 1.1 | Go to **Sign in**. Enter `admin` / `admin` | The administration hub, both queues showing **0**. No change-password screen — that is what `test_reset.sql` is for | ☐ |
+| 1.2 | Sign out | The sign-in page, "You have been signed out" | ☐ |
+| 1.3 | Sign in again with `admin@example.com` / `admin` | Signs in. Username *or* email both work | ☐ |
+| 1.4 | **People** → **Edit details** on your own row. Set your real name → **Save details** | "Details saved." | ☐ |
 
 **Negative checks**
 
+None of these changes the password, so it stays `admin` for the rest of
+the plan.
+
 | # | Try this | Should be refused with | ✓ |
 |---|----------|------------------------|---|
-| 1.7 | Sign in with the old `ChangeMe@2026` | "Those credentials do not match our records." | ☐ |
-| 1.8 | Sign in as `admin` with a wrong password | The same message — it must not reveal that the account exists | ☐ |
-| 1.9 | Change password using a wrong current password | "Your current password is not correct." | ☐ |
-| 1.10 | Change password to `abc` | "Use at least 8 characters." | ☐ |
-| 1.11 | Change password to `cricketing` (no digit) | "Use at least one letter and one number." | ☐ |
+| 1.5 | Sign in as `admin` with a wrong password | "Those credentials do not match our records." | ☐ |
+| 1.6 | Sign in as `nobody` with any password | The same message — it must not reveal which accounts exist | ☐ |
+| 1.7 | **Password** → change, using a wrong current password | "Your current password is not correct." | ☐ |
+| 1.8 | **Password** → change to `abc` | "Use at least 8 characters." | ☐ |
+| 1.9 | **Password** → change to `cricketing` (no digit) | "Use at least one letter and one number." | ☐ |
+
+> **If you do change the admin password**, you cannot set it back to
+> `admin` — the application refuses anything under 8 characters. Re-run
+> `database/test_reset.sql` to get it back, which also empties everything
+> else.
+>
+> **Before going live**, run `database/reset.sql` instead. It issues a
+> temporary password and forces a change at the first sign-in — that flow
+> is worth walking through once when the tournament is real.
 
 ---
 
@@ -463,8 +480,8 @@ Once testing is finished and you are happy.
 | # | Do this | ✓ |
 |---|---------|---|
 | 14.1 | Export a backup of the test database, if you want to keep the evidence | ☐ |
-| 14.2 | Run `database/reset.sql` again — this deletes all of your test data | ☐ |
-| 14.3 | Sign in as `admin` / `ChangeMe@2026`, change the password, set your real name and email | ☐ |
+| 14.2 | Run `database/reset.sql` — **not** `test_reset.sql`. This deletes all of your test data *and* leaves an admin password that must be changed at the first sign-in, which is what a live site wants | ☐ |
+| 14.3 | Sign in as `admin` / `ChangeMe@2026`. You land on **Change password** — set a real one, then your real name and email | ☐ |
 | 14.4 | Create the real tournament, with the real dates | ☐ |
 | 14.5 | Give the real secret code to the real players | ☐ |
 | 14.6 | Create the real teams and name their owners | ☐ |
