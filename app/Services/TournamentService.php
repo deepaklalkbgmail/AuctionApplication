@@ -35,6 +35,18 @@ use PDO;
  */
 final class TournamentService
 {
+    /**
+     * Where a tournament can be in its life, matching the ENUM on
+     * tournaments.status.
+     *
+     * 'cancelled' is not an end state like 'completed'. It means called
+     * off, and it is reversible: cancelling keeps every player, team,
+     * application, lot and sale exactly where they are, so an
+     * administrator who cancels the wrong season loses nothing by
+     * putting it back. Nothing in this class deletes on a cancel.
+     */
+    public const STATUSES = ['draft', 'auction', 'ongoing', 'completed', 'cancelled'];
+
     // -----------------------------------------------------------------
     //  Creating and editing a tournament
     // -----------------------------------------------------------------
@@ -114,13 +126,30 @@ final class TournamentService
         $set    = [];
         $params = [':id' => $tournamentId];
 
-        if (array_key_exists('name', $in)) {
-            $name = $this->text($in['name'], 'Tournament name', 3, 120);
+        // The season may be moving in this same request, so the name has to
+        // be checked against where it is going, not where it was.
+        $season = (int) $current['season_year'];
+
+        if (array_key_exists('season_year', $in)) {
+            $season = (int) $in['season_year'];
+
+            if ($season < 2000 || $season > 2100) {
+                throw new AccountException(AccountException::VALIDATION, 'Season year looks wrong.');
+            }
+
+            $set[]              = 'season_year = :season';
+            $params[':season']  = $season;
+        }
+
+        if (array_key_exists('name', $in) || array_key_exists('season_year', $in)) {
+            $name = array_key_exists('name', $in)
+                ? $this->text($in['name'], 'Tournament name', 3, 120)
+                : (string) $current['name'];
 
             if ((int) Database::scalar(
                 'SELECT COUNT(*) FROM tournaments
                   WHERE name = :n AND season_year = :s AND id <> :id',
-                [':n' => $name, ':s' => (int) $current['season_year'], ':id' => $tournamentId]
+                [':n' => $name, ':s' => $season, ':id' => $tournamentId]
             ) > 0) {
                 throw new AccountException(AccountException::NAME_TAKEN, 'Another tournament already has that name this season.');
             }
@@ -153,7 +182,7 @@ final class TournamentService
         }
 
         if (array_key_exists('status', $in)) {
-            if (!in_array($in['status'], ['draft', 'auction', 'ongoing', 'completed'], true)) {
+            if (!in_array($in['status'], self::STATUSES, true)) {
                 throw new AccountException(AccountException::VALIDATION, 'That is not a tournament status.');
             }
 
@@ -180,11 +209,68 @@ final class TournamentService
                 : $this->count($in[$column], $rule[1], $rule[2], $rule[3]);
         }
 
+        // Checked as a pair, against the stored value for whichever half the
+        // form did not send. Each is legal on its own at 1..25, so nothing
+        // above catches a minimum larger than the maximum — a squad nobody
+        // could ever legally field, which the auction would then enforce.
+        $minSquad = (int) ($params[':min_squad_size'] ?? $current['min_squad_size']);
+        $maxSquad = (int) ($params[':max_squad_size'] ?? $current['max_squad_size']);
+
+        if ($minSquad > $maxSquad) {
+            throw new AccountException(
+                AccountException::VALIDATION,
+                'The minimum squad (' . $minSquad . ') cannot be larger than the maximum (' . $maxSquad . ').'
+            );
+        }
+
         if ($set === []) {
             return $current;
         }
 
         Database::exec('UPDATE tournaments SET ' . implode(', ', $set) . ' WHERE id = :id', $params);
+
+        return $this->find($tournamentId);
+    }
+
+    /**
+     * Call a tournament off, or put it back on.
+     *
+     * Deliberately keeps everything. Every player, team, application,
+     * auction lot and recorded sale stays exactly where it is — the only
+     * changes are the status and, on cancelling, closing entries so
+     * nobody joins something that is not happening. An administrator who
+     * cancels the wrong season presses Reinstate and has lost nothing.
+     *
+     * Deleting instead would be one click away from destroying an entire
+     * auction, and there is no undo for that.
+     *
+     * @return array<string,mixed> the tournament as it now stands
+     */
+    public function setCancelled(int $tournamentId, bool $cancelled): array
+    {
+        $current = $this->find($tournamentId);
+
+        if ($cancelled) {
+            Database::exec(
+                "UPDATE tournaments SET status = 'cancelled', registration_open = 0 WHERE id = :id",
+                [':id' => $tournamentId]
+            );
+
+            return $this->find($tournamentId);
+        }
+
+        // Coming back. 'draft' rather than whatever it was before, because
+        // the previous status is not recorded anywhere and guessing it
+        // wrong is worse than starting somewhere plainly harmless. Entries
+        // stay closed: reopening them is a separate, deliberate press.
+        if ($current['status'] !== 'cancelled') {
+            return $current;
+        }
+
+        Database::exec(
+            "UPDATE tournaments SET status = 'draft' WHERE id = :id",
+            [':id' => $tournamentId]
+        );
 
         return $this->find($tournamentId);
     }
@@ -252,6 +338,16 @@ final class TournamentService
         }
 
         $tournament = $this->findByCode($secretCode);
+
+        // Before the entries check, so a called-off season says so rather
+        // than "registration is closed" — which reads like a deadline and
+        // invites the player to ask when it reopens.
+        if ($tournament['status'] === 'cancelled') {
+            throw new AccountException(
+                AccountException::REGISTRATION_SHUT,
+                $tournament['name'] . ' has been cancelled.'
+            );
+        }
 
         if ((int) $tournament['registration_open'] !== 1) {
             throw new AccountException(
@@ -734,6 +830,11 @@ final class TournamentService
      *   3. the newest tournament that has an auction list at all
      *   4. the newest tournament, so a brand new install still has a name
      *
+     * A cancelled tournament is skipped at every step but the first. The
+     * board is what a hall watches, and a season that has been called off
+     * has no business on it — but an administrator following a direct
+     * ?tournament= link is asking for that one specifically and gets it.
+     *
      * Null only when there are no tournaments whatsoever.
      */
     public function currentAuctionId(?int $preferred = null): ?int
@@ -750,7 +851,11 @@ final class TournamentService
         }
 
         $live = (int) Database::scalar(
-            "SELECT tournament_id FROM auction_lots WHERE status = 'live' ORDER BY id DESC LIMIT 1"
+            "SELECT l.tournament_id
+               FROM auction_lots l
+               JOIN tournaments t ON t.id = l.tournament_id
+              WHERE l.status = 'live' AND t.status <> 'cancelled'
+           ORDER BY l.id DESC LIMIT 1"
         );
 
         if ($live > 0) {
@@ -758,12 +863,13 @@ final class TournamentService
         }
 
         $withLots = (int) Database::scalar(
-            'SELECT t.id
+            "SELECT t.id
                FROM tournaments t
                JOIN auction_lots l ON l.tournament_id = t.id
+              WHERE t.status <> 'cancelled'
            GROUP BY t.id, t.season_year
            ORDER BY t.season_year DESC, t.id DESC
-              LIMIT 1'
+              LIMIT 1"
         );
 
         if ($withLots > 0) {
@@ -771,7 +877,9 @@ final class TournamentService
         }
 
         $newest = (int) Database::scalar(
-            'SELECT id FROM tournaments ORDER BY season_year DESC, id DESC LIMIT 1'
+            "SELECT id FROM tournaments
+              WHERE status <> 'cancelled'
+           ORDER BY season_year DESC, id DESC LIMIT 1"
         );
 
         return $newest > 0 ? $newest : null;

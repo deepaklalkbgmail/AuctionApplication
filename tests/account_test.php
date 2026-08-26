@@ -688,6 +688,138 @@ is('it counts teams',    (int) $apl['team_count'],   2);
 is('it counts players',  (int) $apl['player_count'], 3);
 is('and pending applications', (int) $apl['pending_count'], 0);
 
+// =====================================================================
+section('Editing the whole tournament, not only its dates');
+
+$edited = $tournaments->update($TID, [
+    'name'                      => 'Alappuzha Premier League',
+    'season_year'               => 2027,
+    'auction_date'              => '2027-09-01',
+    'start_date'                => '2027-09-15',
+    'end_date'                  => '2027-10-20',
+    'team_name_change_deadline' => '2027-09-10',
+    'purse_per_team'            => '7500000',
+    'bid_increment'             => '250000',
+    'min_squad_size'            => 9,
+    'max_squad_size'            => 14,
+    'max_overseas'              => 3,
+    'overs_per_innings'         => 16,
+    'status'                    => 'auction',
+]);
+
+is('the season can be moved',        (int) $edited['season_year'],      2027);
+is('the purse can be changed',       $edited['purse_per_team'],         '7500000.00');
+is('the bid increment can be changed', $edited['bid_increment'],        '250000.00');
+is('the minimum squad can be changed', (int) $edited['min_squad_size'], 9);
+is('the maximum squad can be changed', (int) $edited['max_squad_size'], 14);
+is('the overseas limit can be changed', (int) $edited['max_overseas'],  3);
+is('the overs can be changed',       (int) $edited['overs_per_innings'], 16);
+is('the status can be changed',      $edited['status'],                 'auction');
+is('and the dates moved with it',    $edited['auction_date'],           '2027-09-01');
+is('the secret code is left alone',  strlen((string) $edited['secret_code']), 8);
+
+/* Each is legal alone at 1..25, so only a paired check catches this. A
+   squad whose minimum exceeds its maximum can never be legally filled,
+   and the auction would enforce it all afternoon. */
+rejects('a minimum squad larger than the maximum', AccountException::VALIDATION,
+    fn () => $tournaments->update($TID, ['min_squad_size' => 20, 'max_squad_size' => 14]));
+
+is('and nothing was stored from the refused save',
+    (int) $tournaments->find($TID)['min_squad_size'], 9);
+
+rejects('a minimum that exceeds the STORED maximum, sent on its own', AccountException::VALIDATION,
+    fn () => $tournaments->update($TID, ['min_squad_size' => 20]));
+
+rejects('a status nobody offered', AccountException::VALIDATION,
+    fn () => $tournaments->update($TID, ['status' => 'abandoned']));
+
+rejects('a season year outside living memory', AccountException::VALIDATION,
+    fn () => $tournaments->update($TID, ['season_year' => 1899]));
+
+/* Moving a season must not collide with a tournament already there. */
+$clash = $tournaments->create(['name' => 'Alappuzha Premier League', 'season_year' => 2028]);
+
+rejects('moving into a season where the name is taken', AccountException::NAME_TAKEN,
+    fn () => $tournaments->update($TID, ['season_year' => 2028]));
+
+is('and the season did not move',
+    (int) $tournaments->find($TID)['season_year'], 2027);
+
+// =====================================================================
+section('Cancelling a tournament');
+
+$countsBefore = [
+    'players' => (int) Database::scalar('SELECT COUNT(*) FROM players WHERE tournament_id = :t', [':t' => $TID]),
+    'teams'   => (int) Database::scalar('SELECT COUNT(*) FROM teams WHERE tournament_id = :t', [':t' => $TID]),
+    'lots'    => (int) Database::scalar('SELECT COUNT(*) FROM auction_lots WHERE tournament_id = :t', [':t' => $TID]),
+    'apps'    => (int) Database::scalar('SELECT COUNT(*) FROM tournament_registrations WHERE tournament_id = :t', [':t' => $TID]),
+    'users'   => (int) Database::scalar('SELECT COUNT(*) FROM users'),
+];
+
+$off = $tournaments->setCancelled($TID, true);
+
+is('the tournament is cancelled', $off['status'], 'cancelled');
+is('and entries are shut with it', (int) $off['registration_open'], 0);
+
+/* The whole point. Cancelling is reversible only because it destroys
+   nothing — if this ever starts deleting, Reinstate becomes a lie. */
+is('every player is still there',
+    (int) Database::scalar('SELECT COUNT(*) FROM players WHERE tournament_id = :t', [':t' => $TID]),
+    $countsBefore['players']);
+is('every team is still there',
+    (int) Database::scalar('SELECT COUNT(*) FROM teams WHERE tournament_id = :t', [':t' => $TID]),
+    $countsBefore['teams']);
+is('every auction lot is still there',
+    (int) Database::scalar('SELECT COUNT(*) FROM auction_lots WHERE tournament_id = :t', [':t' => $TID]),
+    $countsBefore['lots']);
+is('every application is still there',
+    (int) Database::scalar('SELECT COUNT(*) FROM tournament_registrations WHERE tournament_id = :t', [':t' => $TID]),
+    $countsBefore['apps']);
+is('and no account was touched',
+    (int) Database::scalar('SELECT COUNT(*) FROM users'), $countsBefore['users']);
+
+/* A player turning up with the code is told what actually happened,
+   rather than "registration is closed", which reads like a deadline. */
+$hopeful = $accounts->register(registration([
+    'name' => 'Hopeful Player', 'email' => 'hopeful@club.test',
+    'username' => 'hopeful', 'phone' => '9001234567',
+]));
+$accounts->decideRegistration($hopeful, true, $ADMIN);
+
+rejects('a player cannot join a cancelled tournament', AccountException::REGISTRATION_SHUT,
+    fn () => $tournaments->apply($hopeful, (string) $off['secret_code']));
+
+/* The board is what a hall watches.
+
+   The seeded tournament has a lot under the hammer, and a live lot wins
+   the board outright — so with it left alone the "skips it" assertion
+   would pass whether or not cancelling did anything. Quieten it first,
+   and prove the board really was on this tournament before. */
+Database::run("UPDATE auction_lots SET status = 'queued' WHERE status = 'live'");
+
+$tournaments->setCancelled($TID, false);
+is('the board is on this tournament to begin with',
+    $tournaments->currentAuctionId(), $TID);
+
+$off = $tournaments->setCancelled($TID, true);
+
+is('the public board then skips it',
+    $tournaments->currentAuctionId() === $TID, false);
+is('but a direct link still reaches it',
+    $tournaments->currentAuctionId($TID), $TID);
+
+$back = $tournaments->setCancelled($TID, false);
+
+is('reinstating brings it back as a draft', $back['status'], 'draft');
+is('entries stay shut until somebody opens them', (int) $back['registration_open'], 0);
+is('and the board is on it again',
+    $tournaments->currentAuctionId(), $TID);
+
+is('reinstating something that was never cancelled changes nothing',
+    $tournaments->setCancelled($TID, false)['status'], 'draft');
+
+Database::run('DELETE FROM tournaments WHERE id = :id', [':id' => (int) $clash['id']]);
+
 // ---------------------------------------------------------------------
 
 echo "\n" . str_repeat('─', 60) . "\n";

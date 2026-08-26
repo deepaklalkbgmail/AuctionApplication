@@ -101,7 +101,7 @@ CREATE TABLE `tournaments` (
     `overs_per_innings`  TINYINT UNSIGNED NOT NULL DEFAULT 20,
     `balls_per_over`     TINYINT UNSIGNED NOT NULL DEFAULT 6,
 
-    `status`             ENUM('draft','auction','ongoing','completed') NOT NULL DEFAULT 'draft',
+    `status`             ENUM('draft','auction','ongoing','completed','cancelled') NOT NULL DEFAULT 'draft',
     `created_at`         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`         TIMESTAMP       NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 
