@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Exceptions\AccountException;
+use App\Services\AccountService;
 use Database;
 use PDO;
 
@@ -1100,7 +1101,7 @@ final class TournamentService
     {
         $value = trim((string) $value);
 
-        return in_array($value, ['batsman', 'bowler', 'all_rounder', 'wicket_keeper'], true)
+        return array_key_exists($value, AccountService::PLAYER_KINDS)
             ? $value
             : 'batsman';
     }

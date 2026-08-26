@@ -23,6 +23,8 @@ declare(strict_types=1);
 
 use App\Core\Auth;
 
+require_once __DIR__ . '/../partials/player_kinds.php';
+
 /** A one-shot message carried across a redirect. */
 function flash(string $kind, string $message): void
 {
@@ -253,17 +255,10 @@ function submit_button(string $label, string $tone = 'primary'): void
     <?php
 }
 
-/** The kinds of cricketer, for a select. */
+/** The kinds of cricketer, for a select. One list, in player_kinds.php. */
 function player_type_options(bool $blankFirst = true): array
 {
-    $options = [
-        'batsman'       => 'Batsman',
-        'bowler'        => 'Bowler',
-        'all_rounder'   => 'All-rounder',
-        'wicket_keeper' => 'Wicket-keeper',
-    ];
-
-    return $blankFirst ? ['' => 'Choose one…'] + $options : $options;
+    return player_kinds($blankFirst);
 }
 
 /**

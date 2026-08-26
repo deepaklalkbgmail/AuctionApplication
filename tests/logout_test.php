@@ -156,7 +156,7 @@ function seed(): void
 
     $owner = $accounts->register([
         'name' => 'Test Owner', 'email' => 'owner@t.test', 'username' => 'test.owner',
-        'phone' => '9876543211', 'address' => '2 Test Road', 'player_type' => 'all_rounder',
+        'phone' => '9876543211', 'address' => '2 Test Road', 'player_type' => 'bowling_all_rounder',
         'password' => TEST_PASSWORD, 'password_confirm' => TEST_PASSWORD,
     ]);
     $accounts->decideRegistration($owner, true, $adminId);

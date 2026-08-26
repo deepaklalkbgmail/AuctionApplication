@@ -187,10 +187,10 @@ function seed(): array
     /* Approved in this order; the sets are deliberately jumbled against it,
        so ordering by set can only pass if it is really sorting. */
     $people = [
-        ['Bottom Of Set B', 'sheet.b1', 'Set B',   'batsman', null],
-        ['Marquee Man',     'sheet.m1', 'Marquee', 'batsman', $photo],
-        ['Middle Of Set A', 'sheet.a1', 'Set A',   'bowler',  null],
-        ['Second Marquee',  'sheet.m2', 'Marquee', 'bowler',  null],
+        ['Bottom Of Set B', 'sheet.b1', 'Set B',   'bowler',              null],
+        ['Marquee Man',     'sheet.m1', 'Marquee', 'batsman',             $photo],
+        ['Middle Of Set A', 'sheet.a1', 'Set A',   'bowling_all_rounder', null],
+        ['Second Marquee',  'sheet.m2', 'Marquee', 'batting_all_rounder', null],
     ];
 
     foreach ($people as $i => [$name, $username, $set, $role, $photoPath]) {
@@ -319,6 +319,19 @@ is('Marquee first puts both Marquee players at the top',
     array_slice($bySet, 0, 2), ['Marquee Man', 'Second Marquee']);
 is('then Set A', $bySet[2], 'Middle Of Set A');
 is('then Set B', $bySet[3], 'Bottom Of Set B');
+
+$byKind = poolOrder(http("{$base}/admin/auction.php?tournament={$tid}&sort=kind", $jar)['body']);
+
+is('by type of player runs batting to bowling',
+    $byKind, ['Marquee Man', 'Second Marquee', 'Middle Of Set A', 'Bottom Of Set B']);
+
+$kindSheet = http("{$base}/admin/auction.php?tournament={$tid}&sort=kind", $jar)['body'];
+
+is('and the two all-rounders are named apart',
+    str_contains($kindSheet, 'Batting all-rounder')
+    && str_contains($kindSheet, 'Bowling all-rounder'), true);
+is('never as a bare "all rounder"',
+    str_contains($kindSheet, 'all rounder'), false);
 
 $byPrice = poolOrder(http("{$base}/admin/auction.php?tournament={$tid}&sort=price", $jar)['body']);
 

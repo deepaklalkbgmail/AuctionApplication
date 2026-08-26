@@ -57,7 +57,7 @@ $accounts->register(person([
 
 // Two approved players whose applications are waiting — the Applications queue.
 foreach ([
-    ['Nikhil Rao',   'nikhil.rao@club.test',   'nikhil.rao',   '9876543210', '22 Fort Road, Kochi',      'all_rounder'],
+    ['Nikhil Rao',   'nikhil.rao@club.test',   'nikhil.rao',   '9876543210', '22 Fort Road, Kochi',      'batting_all_rounder'],
     ['Sarita Balan', 'sarita.balan@club.test', 'sarita.balan', '9847098765', '7 Lake View, Kumarakom',   'wicket_keeper'],
 ] as [$name, $email, $username, $phone, $address, $type]) {
     $id = $accounts->register(person([

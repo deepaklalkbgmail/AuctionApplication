@@ -28,7 +28,13 @@ declare(strict_types=1);
  *    $owner   the owner's name, or null
  *    $squad   rows of full_name, role, is_overseas, sold_price
  *    $limits  ['max_squad_size' => int, 'max_overseas' => int]
+ *
+ *  $showPrices is off by default. What a player fetched is not shown to
+ *  the room: the squad reads as names and kinds of player. An
+ *  administrative screen that ought to see the figures passes true.
  */
+
+require_once __DIR__ . '/player_kinds.php';
 
 if (!function_exists('team_card_styles')) {
 
@@ -110,18 +116,6 @@ if (!function_exists('team_card_styles')) {
         <?php
     }
 
-    /** batsman -> Batsman, all_rounder -> All-rounder */
-    function tc_role(string $role): string
-    {
-        return match ($role) {
-            'batsman'       => 'Batsman',
-            'bowler'        => 'Bowler',
-            'all_rounder'   => 'All-rounder',
-            'wicket_keeper' => 'Wicket-keeper',
-            default         => ucfirst(str_replace('_', ' ', $role)),
-        };
-    }
-
     /**
      * The clickable team name.
      *
@@ -142,7 +136,7 @@ if (!function_exists('team_card_styles')) {
      * @param array<int,array<string,mixed>>   $squad
      * @param array{max_squad_size:int,max_overseas:int} $limits
      */
-    function team_card(array $team, ?string $owner, array $squad, array $limits): void
+    function team_card(array $team, ?string $owner, array $squad, array $limits, bool $showPrices = false): void
     {
         $bought   = count($squad);
         $slots    = max(0, $limits['max_squad_size'] - $bought);
@@ -151,19 +145,11 @@ if (!function_exists('team_card_styles')) {
         /* What the squad is made of — the question everybody asks of a
            half-finished team, and the first thing looked at once it is
            finished. */
-        $shape = ['batsman' => 0, 'bowler' => 0, 'all_rounder' => 0, 'wicket_keeper' => 0];
+        $shape = array_fill_keys(array_keys(\App\Services\AccountService::PLAYER_KINDS), 0);
 
         foreach ($squad as $player) {
             $role = (string) $player['role'];
             $shape[$role] = ($shape[$role] ?? 0) + 1;
-        }
-
-        $priciest = null;
-
-        foreach ($squad as $player) {
-            if ($priciest === null || (float) $player['sold_price'] > (float) $priciest['sold_price']) {
-                $priciest = $player;
-            }
         }
 
         ?>
@@ -214,7 +200,7 @@ if (!function_exists('team_card_styles')) {
 
                 <div class="tc-shape">
                     <?php foreach ($shape as $role => $count): ?>
-                        <span class="tc-chip"><?= e(tc_role($role)) ?> <strong><?= $count ?></strong></span>
+                        <span class="tc-chip"><?= e(player_kind($role)) ?> <strong><?= $count ?></strong></span>
                     <?php endforeach; ?>
                     <?php if ($slots > 0): ?>
                         <span class="tc-chip tc-chip-short"><?= $slots ?> slot<?= $slots === 1 ? '' : 's' ?> left</span>
@@ -230,7 +216,11 @@ if (!function_exists('team_card_styles')) {
                 <?php else: ?>
                     <table class="tc-squad">
                         <thead>
-                            <tr><th>Player</th><th>Kind of player</th><th style="text-align:right">Price</th></tr>
+                            <tr>
+                                <th>Player</th>
+                                <th>Kind of player</th>
+                                <?php if ($showPrices): ?><th style="text-align:right">Price</th><?php endif; ?>
+                            </tr>
                         </thead>
                         <tbody>
                             <?php foreach ($squad as $player): ?>
@@ -241,19 +231,14 @@ if (!function_exists('team_card_styles')) {
                                             <span class="tc-os">overseas</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="tc-role"><?= e(tc_role((string) $player['role'])) ?></td>
-                                    <td class="tc-price"><?= e(board_rupees($player['sold_price'])) ?></td>
+                                    <td class="tc-role"><?= e(player_kind((string) $player['role'])) ?></td>
+                                    <?php if ($showPrices): ?>
+                                        <td class="tc-price"><?= e(board_rupees($player['sold_price'])) ?></td>
+                                    <?php endif; ?>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
-
-                    <?php if ($priciest !== null): ?>
-                        <p style="margin-top:.7rem;font-size:.75rem;color:#64748b">
-                            Most expensive: <strong style="color:#cbd5e1"><?= e((string) $priciest['full_name']) ?></strong>
-                            at <?= e(board_rupees($priciest['sold_price'])) ?>.
-                        </p>
-                    <?php endif; ?>
                 <?php endif; ?>
             </div>
         </div>

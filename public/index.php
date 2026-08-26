@@ -98,10 +98,7 @@ try {
     error_log('[landing] snapshot unavailable: ' . $e->getMessage());
 }
 
-$roleLabels = [
-    'batsman' => 'Batter', 'bowler' => 'Bowler',
-    'all_rounder' => 'All-rounder', 'wicket_keeper' => 'Wicket-keeper',
-];
+require_once BASE_PATH . '/app/Views/partials/player_kinds.php';
 
 /** The five roles, in the order a visitor is most likely to need them. */
 $roles = [
@@ -285,7 +282,7 @@ $accents = [
                         <p class="text-[10px] font-bold uppercase tracking-wider text-slate-500">Under the hammer</p>
                         <p class="mt-1 truncate text-lg font-black text-white"><?= e((string) $liveLot['full_name']) ?></p>
                         <p class="mt-0.5 text-[12px] font-medium text-emerald-300">
-                            <?= e($roleLabels[$liveLot['role']] ?? (string) $liveLot['role']) ?>
+                            <?= e(player_kind($liveLot["role"])) ?>
                         </p>
                         <p class="mt-3 font-mono text-2xl font-black text-gold">
                             <?= e(money($liveLot['current_bid'] ?? $liveLot['base_price'])) ?>

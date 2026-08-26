@@ -28,6 +28,7 @@ require_once BASE_PATH . '/app/Views/partials/player_card.php';
 use App\Core\Auth;
 use App\Core\Security;
 use App\Exceptions\AuctionException;
+use App\Services\AccountService;
 use App\Services\AuctionService;
 use App\Services\TournamentService;
 
@@ -53,6 +54,7 @@ $all = $tournaments->listTournaments();
 const SORTS = [
     'lot'   => 'Lot order',
     'set'   => 'Marquee first',
+    'kind'  => 'Type of player',
     'price' => 'Base price, highest',
     'name'  => 'Name',
 ];
@@ -201,6 +203,13 @@ function lotsWithStatus(int $tournamentId, array $statuses, string $search, stri
         'set'   => "CASE WHEN p.auction_set IS NULL OR p.auction_set = '' THEN 2
                          WHEN LOWER(p.auction_set) = 'marquee'           THEN 0
                          ELSE 1 END, p.auction_set, l.lot_order",
+        // Grouped the way the list itself is ordered — batting at one end,
+        // bowling at the other — so calling every batter together, then the
+        // all-rounders, then the bowlers, is one click.
+        'kind'  => 'FIELD(p.role, ' . implode(', ', array_map(
+            static fn (string $k): string => "'" . $k . "'",
+            array_keys(AccountService::PLAYER_KINDS)
+        )) . '), l.lot_order',
         'price' => 'l.base_price DESC, l.lot_order',
         'name'  => 'p.full_name, l.lot_order',
         default => 'l.lot_order, p.full_name',
@@ -404,7 +413,7 @@ player_card_styles();
                         <div class="min-w-[10rem] flex-1">
                             <p class="text-[15px] font-extrabold text-white"><?= player_card_link($lot) ?></p>
                             <p class="text-[11px] text-slate-500">
-                                <?= e(str_replace('_', ' ', (string) $lot['role'])) ?>
+                                <?= e(player_kind((string) $lot['role'])) ?>
                                 · base <?= rupees($lot['base_price']) ?>
                                 <?php if (!empty($lot['auction_set'])): ?> · <?= e((string) $lot['auction_set']) ?><?php endif; ?>
                                 <?php if ((int) $lot['is_overseas'] === 1): ?>
@@ -496,7 +505,7 @@ player_card_styles();
                         <tr class="border-b border-white/5 last:border-0">
                             <td class="px-4 py-2.5">
                                 <span class="text-[13px] font-bold text-white"><?= player_card_link($lot) ?></span>
-                                <span class="ml-1.5 text-[11px] text-slate-500"><?= e(str_replace('_', ' ', (string) $lot['role'])) ?></span>
+                                <span class="ml-1.5 text-[11px] text-slate-500"><?= e(player_kind((string) $lot['role'])) ?></span>
                                 <?php player_card($lot, '../'); ?>
                             </td>
                             <td class="px-4 py-2.5 text-[13px] text-slate-300"><?= e((string) $lot['team_name']) ?></td>

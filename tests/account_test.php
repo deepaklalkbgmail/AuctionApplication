@@ -93,7 +93,7 @@ function registration(array $overrides = []): array
         'username'         => 'nikhil.rao',
         'phone'            => '9876543210',
         'address'          => '14 Marine Drive, Kochi',
-        'player_type'      => 'all_rounder',
+        'player_type'      => 'batting_all_rounder',
         'password'         => 'Cricket2026',
         'password_confirm' => 'Cricket2026',
     ];
@@ -122,7 +122,7 @@ is('and waits for an administrator',     $row['status'],      'pending');
 is('name is stored as entered',          $row['name'],        'Nikhil Rao');
 is('email is lower-cased',               $row['email'],       'nikhil@club.test');
 is('address is kept',                    $row['address'],     '14 Marine Drive, Kochi');
-is('kind of player is kept',             $row['player_type'], 'all_rounder');
+is('kind of player is kept',             $row['player_type'], 'batting_all_rounder');
 is('the password is hashed, not stored', str_starts_with((string) $row['password_hash'], '$2y$'), true);
 is('no photo is fine',                   $row['photo_path'],  null);
 
@@ -168,6 +168,34 @@ rejects('an invented kind of player is refused', AccountException::VALIDATION,
     fn () => $accounts->register(registration([
         'email' => 'g@club.test', 'username' => 'ggg', 'player_type' => 'twelfth_man',
     ])));
+
+/* There is no plain "all-rounder" any more. A team buying a batter who
+   bowls a few overs is not buying a fourth seamer who can bat, and one
+   word for both hid the difference while the player was being called. */
+rejects('the old undivided all-rounder is refused', AccountException::VALIDATION,
+    fn () => $accounts->register(registration([
+        'email' => 'ar@club.test', 'username' => 'ar1', 'player_type' => 'all_rounder',
+    ])));
+
+$battingAr = $accounts->register(registration([
+    'email' => 'bar@club.test', 'username' => 'bar1', 'player_type' => 'batting_all_rounder',
+]));
+is('a batting all-rounder is accepted',
+    Database::scalar('SELECT player_type FROM users WHERE id = :id', [':id' => $battingAr]),
+    'batting_all_rounder');
+
+$bowlingAr = $accounts->register(registration([
+    'email' => 'war@club.test', 'username' => 'war1', 'player_type' => 'bowling_all_rounder',
+]));
+is('and a bowling all-rounder is a different thing',
+    Database::scalar('SELECT player_type FROM users WHERE id = :id', [':id' => $bowlingAr]),
+    'bowling_all_rounder');
+
+is('both are offered on the registration form',
+    array_slice(array_keys(\App\Services\AccountService::PLAYER_KINDS), 1, 2),
+    ['batting_all_rounder', 'bowling_all_rounder']);
+is('and neither is written as "all rounder"',
+    \App\Services\AccountService::PLAYER_KINDS['batting_all_rounder'], 'Batting all-rounder');
 
 rejects('a username with spaces is refused', AccountException::VALIDATION,
     fn () => $accounts->register(registration([

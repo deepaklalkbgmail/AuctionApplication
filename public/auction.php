@@ -295,12 +295,7 @@ if (!empty($lot['ends_at'])) {
     $secondsLeft = max(0, strtotime((string) $lot['ends_at']) - time());
 }
 
-$roleLabels = [
-    'batsman'       => 'Batter',
-    'bowler'        => 'Bowler',
-    'all_rounder'   => 'All-rounder',
-    'wicket_keeper' => 'Wicket-keeper',
-];
+require_once BASE_PATH . '/app/Views/partials/player_kinds.php';
 
 // Payload handed to Alpine. json() hex-escapes <, &, ' and " so nothing in a
 // player or team name can break out of the <script> block.
@@ -536,7 +531,7 @@ $bootstrap = Security::json([
                                         <?= e((string) $lot['full_name']) ?>
                                     </h1>
                                     <p class="mt-1.5 text-sm font-semibold text-emerald-300">
-                                        <?= e($roleLabels[$lot['role']] ?? (string) $lot['role']) ?>
+                                        <?= e(player_kind($lot['role'])) ?>
                                     </p>
                                     <p class="mt-2 text-[12px] font-medium text-slate-400">
                                         Base price
@@ -774,7 +769,7 @@ $bootstrap = Security::json([
                                     <?php endif; ?>
                                 </div>
                                 <p class="mt-2 truncate text-[13px] font-bold text-white"><?= e((string) $q['display_name']) ?></p>
-                                <p class="mt-0.5 text-[11px] font-medium text-slate-400"><?= e($roleLabels[$q['role']] ?? (string) $q['role']) ?></p>
+                                <p class="mt-0.5 text-[11px] font-medium text-slate-400"><?= e(player_kind($q['role'])) ?></p>
                                 <p class="mt-2.5 font-mono text-[12px] font-bold text-emerald-300"><?= e(money($q['base_price'])) ?></p>
                             </div>
                         <?php endforeach; ?>
@@ -842,9 +837,11 @@ $bootstrap = Security::json([
                                 </span>
                                 <div class="min-w-0 flex-1">
                                     <p class="truncate text-[13px] font-semibold text-white"><?= e((string) $s['display_name']) ?></p>
-                                    <p class="text-[11px] text-slate-500"><?= e($roleLabels[$s['role']] ?? (string) $s['role']) ?></p>
+                                    <p class="text-[11px] text-slate-500"><?= e(player_kind($s['role'])) ?></p>
                                 </div>
-                                <span class="font-mono text-[13px] font-bold text-slate-300"><?= e(money($s['sold_price'])) ?></span>
+                                <?php /* No figure. What a player fetched is not
+                                         shown to the room — same rule as the
+                                         board. The administrator's sheet has it. */ ?>
                             </li>
                         <?php endforeach; ?>
                     </ul>

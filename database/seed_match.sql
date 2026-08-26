@@ -27,12 +27,12 @@ VALUES
 /* Titan Strikers (team 1) */
     (11, 1, 'Aditya Rathore',   'A Rathore',   'India',        'batsman',       'right_hand', 'none',              0, 500000.00, 'sold', 1, 500000.00),
     (12, 1, 'Mario Fernandes',  'M Fernandes', 'India',        'wicket_keeper', 'right_hand', 'none',              0, 500000.00, 'sold', 1, 500000.00),
-    (13, 1, 'Simran Grewal',    'S Grewal',    'India',        'all_rounder',   'left_hand',  'left_arm_orthodox', 0, 500000.00, 'sold', 1, 500000.00),
+    (13, 1, 'Simran Grewal',    'S Grewal',    'India',        'bowling_all_rounder',   'left_hand',  'left_arm_orthodox', 0, 500000.00, 'sold', 1, 500000.00),
     (14, 1, 'Rohan Iyer',       'R Iyer',      'India',        'batsman',       'right_hand', 'none',              0, 500000.00, 'sold', 1, 500000.00),
     (15, 1, 'Tejas Bhat',       'T Bhat',      'India',        'bowler',        'right_hand', 'right_arm_fast',    0, 500000.00, 'sold', 1, 500000.00),
     (16, 1, 'Prakash Naidu',    'P Naidu',     'India',        'bowler',        'right_hand', 'right_arm_offbreak',0, 500000.00, 'sold', 1, 500000.00),
     (17, 1, 'Devendra Kulkarni','D Kulkarni',  'India',        'bowler',        'left_hand',  'left_arm_fast',     0, 500000.00, 'sold', 1, 500000.00),
-    (18, 1, 'Harsh Shetty',     'H Shetty',    'India',        'all_rounder',   'right_hand', 'right_arm_medium',  0, 500000.00, 'sold', 1, 500000.00),
+    (18, 1, 'Harsh Shetty',     'H Shetty',    'India',        'batting_all_rounder',   'right_hand', 'right_arm_medium',  0, 500000.00, 'sold', 1, 500000.00),
     (19, 1, 'Nikhil Kaul',      'N Kaul',      'India',        'batsman',       'left_hand',  'none',              0, 500000.00, 'sold', 1, 500000.00),
     (20, 1, 'Joel Pereira',     'J Pereira',   'India',        'bowler',        'right_hand', 'right_arm_legbreak',0, 500000.00, 'sold', 1, 500000.00),
 
@@ -41,9 +41,9 @@ VALUES
     (22, 1, 'Hardik Malhotra',  'H Malhotra',  'India',        'bowler',        'right_hand', 'right_arm_offbreak',0, 500000.00, 'sold', 2, 500000.00),
     (23, 1, 'Yash Tandon',      'Y Tandon',    'India',        'bowler',        'right_hand', 'right_arm_legbreak',0, 500000.00, 'sold', 2, 500000.00),
     (24, 1, 'Brian Oduya',      'B Oduya',     'Kenya',        'bowler',        'left_hand',  'left_arm_orthodox', 1, 500000.00, 'sold', 2, 500000.00),
-    (25, 1, 'Chris Whitfield',  'C Whitfield', 'England',      'all_rounder',   'right_hand', 'right_arm_medium',  1, 500000.00, 'sold', 2, 500000.00),
+    (25, 1, 'Chris Whitfield',  'C Whitfield', 'England',      'bowling_all_rounder',   'right_hand', 'right_arm_medium',  1, 500000.00, 'sold', 2, 500000.00),
     (26, 1, 'Alan Sequeira',    'A Sequeira',  'India',        'bowler',        'right_hand', 'right_arm_fast',    0, 500000.00, 'sold', 2, 500000.00),
-    (27, 1, 'Faizan Ali',       'F Ali',       'India',        'all_rounder',   'right_hand', 'right_arm_offbreak',0, 500000.00, 'sold', 2, 500000.00),
+    (27, 1, 'Faizan Ali',       'F Ali',       'India',        'batting_all_rounder',   'right_hand', 'right_arm_offbreak',0, 500000.00, 'sold', 2, 500000.00),
     (28, 1, 'Kartik Joshi',     'K Joshi',     'India',        'batsman',       'right_hand', 'none',              0, 500000.00, 'sold', 2, 500000.00),
     (29, 1, 'Elijah Mwangi',    'E Mwangi',    'Kenya',        'bowler',        'left_hand',  'left_arm_fast',     1, 500000.00, 'sold', 2, 500000.00),
     (30, 1, 'Ryan Dsouza',      'R Dsouza',    'India',        'wicket_keeper', 'right_hand', 'none',              0, 500000.00, 'sold', 2, 500000.00);

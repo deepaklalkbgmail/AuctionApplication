@@ -35,7 +35,7 @@
    names — it does not overwrite. To undo, see the bottom of this file.
 
    Edit the names, roles and base prices freely. Keep to these values:
-     role           batsman | bowler | all_rounder | wicket_keeper
+     role           batsman | batting_all_rounder | bowling_all_rounder | wicket_keeper | bowler
      batting_style  right_hand | left_hand | NULL
      bowling_style  right_arm_fast | right_arm_medium | right_arm_offbreak |
                     right_arm_legbreak | left_arm_fast | left_arm_medium |
@@ -67,13 +67,13 @@ INSERT INTO `players`
 VALUES
     (@tournament, NULL, 'Arjun Menon',      'A Menon',   'India',     'batsman',       'right_hand', 'none',               0, 1, 'Marquee', 2000000.00, 48, 1420,  2, 138.50, 0.00,  'available'),
     (@tournament, NULL, 'Rohit Pillai',     'R Pillai',  'India',     'batsman',       'left_hand',  'right_arm_offbreak', 0, 0, 'Marquee', 1500000.00, 35,  980,  9, 129.20, 7.40,  'available'),
-    (@tournament, NULL, 'Vishnu Nair',      'V Nair',    'India',     'all_rounder',   'right_hand', 'right_arm_medium',   0, 1, 'Set A',   1500000.00, 52, 1105, 47, 132.10, 7.90,  'available'),
-    (@tournament, NULL, 'Sandeep Kurup',    'S Kurup',   'India',     'all_rounder',   'left_hand',  'left_arm_orthodox',  0, 0, 'Set A',   1000000.00, 29,  610, 31, 118.60, 6.80,  'available'),
+    (@tournament, NULL, 'Vishnu Nair',      'V Nair',    'India',     'batting_all_rounder',   'right_hand', 'right_arm_medium',   0, 1, 'Set A',   1500000.00, 52, 1105, 47, 132.10, 7.90,  'available'),
+    (@tournament, NULL, 'Sandeep Kurup',    'S Kurup',   'India',     'bowling_all_rounder',   'left_hand',  'left_arm_orthodox',  0, 0, 'Set A',   1000000.00, 29,  610, 31, 118.60, 6.80,  'available'),
     (@tournament, NULL, 'Anand Varma',      'A Varma',   'India',     'bowler',        'right_hand', 'right_arm_fast',     0, 1, 'Set A',   1000000.00, 41,  180, 62,  92.40, 7.10,  'available'),
     (@tournament, NULL, 'Faisal Rahman',    'F Rahman',  'India',     'bowler',        'right_hand', 'right_arm_legbreak', 0, 0, 'Set B',    800000.00, 26,   95, 38,  88.00, 6.95,  'available'),
     (@tournament, NULL, 'Deepak Thomas',    'D Thomas',  'India',     'wicket_keeper', 'right_hand', 'none',               0, 0, 'Set B',    800000.00, 33,  845,  0, 125.70, 0.00,  'available'),
     (@tournament, NULL, 'Joel Fernandes',   'J Fernandes','India',    'wicket_keeper', 'left_hand',  'none',               0, 0, 'Set B',    500000.00, 18,  402,  0, 119.30, 0.00,  'available'),
-    (@tournament, NULL, 'Cameron Blake',    'C Blake',   'Australia', 'all_rounder',   'right_hand', 'right_arm_fast',     1, 1, 'Overseas', 2000000.00, 60, 1310, 55, 141.80, 7.60,  'available');
+    (@tournament, NULL, 'Cameron Blake',    'C Blake',   'Australia', 'batting_all_rounder',   'right_hand', 'right_arm_fast',     1, 1, 'Overseas', 2000000.00, 60, 1310, 55, 141.80, 7.60,  'available');
 
 
 /* ------------------------------------------------------------------- */

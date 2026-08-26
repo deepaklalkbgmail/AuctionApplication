@@ -66,6 +66,7 @@ $boardLimits = [
     'max_overseas'   => (int) ($boardTournament['max_overseas'] ?? 4),
 ];
 
+require_once __DIR__ . '/player_kinds.php';
 require_once __DIR__ . '/team_card.php';
 
 ?>
@@ -127,8 +128,7 @@ require_once __DIR__ . '/team_card.php';
     <div class="flex flex-wrap items-baseline justify-between gap-3">
         <h1 class="text-2xl font-extrabold tracking-tight text-white">Auction board</h1>
         <p class="text-[13px] text-slate-400">
-            <?= count($boardSold) ?> sold · <?= e(board_rupees($boardSpent)) ?> spent
-            · <?= count($boardToCall) ?> still to call
+            <?= count($boardSold) ?> sold · <?= count($boardToCall) ?> still to call
         </p>
     </div>
     <p class="mt-1.5 text-[12px] text-slate-500">
@@ -214,7 +214,6 @@ require_once __DIR__ . '/team_card.php';
                         <tr class="border-b border-white/10 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                             <th class="px-4 py-2.5">Player</th>
                             <th class="px-4 py-2.5">Team</th>
-                            <th class="px-4 py-2.5 text-right">Price</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -222,13 +221,10 @@ require_once __DIR__ . '/team_card.php';
                             <tr class="border-b border-white/5 last:border-0">
                                 <td class="px-4 py-2.5">
                                     <span class="text-[13px] font-bold text-white"><?= e((string) $row['full_name']) ?></span>
-                                    <span class="ml-1.5 text-[11px] text-slate-500"><?= e(str_replace('_', ' ', (string) $row['role'])) ?></span>
+                                    <span class="ml-1.5 text-[11px] text-slate-500"><?= e(player_kind((string) $row['role'])) ?></span>
                                 </td>
                                 <td class="px-4 py-2.5 text-[13px] text-slate-300">
                                     <?= team_card_link(['id' => $row['team_id'], 'name' => $row['team_name']]) ?>
-                                </td>
-                                <td class="px-4 py-2.5 text-right font-mono text-[13px] font-bold text-emerald-400">
-                                    <?= e(board_rupees($row['sold_price'])) ?>
                                 </td>
                             </tr>
                         <?php endforeach; ?>

@@ -475,7 +475,6 @@ is('the card is on the page', str_contains($html, 'id="team-' . $boardTeam . '"'
 is('it names the owner', str_contains($html, 'Owner: Board Owner'), true);
 is('it lists who they bought', str_contains($html, 'Late Arrival'), true);
 is('with what kind of player they are', str_contains($html, '>Batsman</td>'), true);
-is('and what they cost', str_contains($html, '₹4,50,000'), true);
 is('it shows what is left in the purse', str_contains($html, '₹95,50,000'), true);
 is('and how many slots are still open', str_contains($html, 'slots left'), true);
 is('the team is clickable from the sold row too',
@@ -493,9 +492,18 @@ is('the board asks for the live refresh script',
 is('and says plainly what to do if it never arrives',
     str_contains($html, 'Reload to see the latest.'), true);
 
+/* Nobody watching is told what a player fetched. The purse figures are
+   still there — they are a team's own position, not a player's price —
+   but no per-player amount appears anywhere on the page. */
+is('the sold list has no price column',
+    str_contains($html, '>Price</th>'), false);
+is('and the squad on a team card carries no prices',
+    str_contains($html, 'class="tc-price"'), false);
+is('no player is listed at what they went for',
+    str_contains($html, '₹4,50,000</td>'), false);
+
 /* What board-live.js does, done here: fetch the same page again and see
    the sale that happened in between. */
-$before  = substr_count($html, 'class="tc-squad"');
 $secondLot = (int) Database::scalar(
     "SELECT id FROM auction_lots WHERE tournament_id = :t AND status = 'queued' ORDER BY lot_order LIMIT 1",
     [':t' => $second]
@@ -508,7 +516,7 @@ if ($secondLot > 0) {
 $refetched = (string) shell_exec('php ' . escapeshellarg(BASE_PATH . '/public/auction.php') . ' 2>&1');
 
 is('refetching the page picks the next sale up',
-    str_contains($refetched, '₹3,00,000'), $secondLot > 0);
+    substr_count($refetched, '<tr>') > substr_count($html, '<tr>'), $secondLot > 0);
 is('and the purse on the card has moved',
     str_contains($refetched, '₹92,50,000'), $secondLot > 0);
 

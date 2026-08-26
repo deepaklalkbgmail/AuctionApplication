@@ -36,7 +36,7 @@ return [
         'full_name'          => 'Kabir Anand',
         'display_name'       => 'K Anand',
         'photo_url'          => null,
-        'role'               => 'all_rounder',
+        'role'               => 'bowling_all_rounder',
         'country'            => 'India',
         'is_overseas'        => 0,
         'auction_set'        => 'Marquee',
@@ -78,12 +78,12 @@ return [
         ['lot_order' => 7,  'base_price' => 1500000.00, 'display_name' => 'T Nkosi',    'role' => 'wicket_keeper', 'country' => 'South Africa', 'is_overseas' => 1],
         ['lot_order' => 8,  'base_price' => 1000000.00, 'display_name' => 'D Sharma',   'role' => 'bowler',        'country' => 'India',        'is_overseas' => 0],
         ['lot_order' => 9,  'base_price' => 1200000.00, 'display_name' => 'J Hartley',  'role' => 'bowler',        'country' => 'England',      'is_overseas' => 1],
-        ['lot_order' => 10, 'base_price' =>  500000.00, 'display_name' => 'A Menon',    'role' => 'all_rounder',   'country' => 'India',        'is_overseas' => 0],
+        ['lot_order' => 10, 'base_price' =>  500000.00, 'display_name' => 'A Menon',    'role' => 'batting_all_rounder',   'country' => 'India',        'is_overseas' => 0],
     ],
 
     'sold' => [
         ['sold_price' => 900000.00,  'display_name' => 'N Bose',  'role' => 'wicket_keeper', 'short_name' => 'CK', 'primary_color' => '#38bdf8'],
-        ['sold_price' => 1800000.00, 'display_name' => 'L Carter','role' => 'all_rounder',   'short_name' => 'TS', 'primary_color' => '#22c55e'],
+        ['sold_price' => 1800000.00, 'display_name' => 'L Carter','role' => 'bowling_all_rounder',   'short_name' => 'TS', 'primary_color' => '#22c55e'],
         ['sold_price' => 2600000.00, 'display_name' => 'S Khan',  'role' => 'bowler',        'short_name' => 'DF', 'primary_color' => '#a855f7'],
         ['sold_price' => 3400000.00, 'display_name' => 'V Rao',   'role' => 'batsman',       'short_name' => 'RC', 'primary_color' => '#f59e0b'],
     ],

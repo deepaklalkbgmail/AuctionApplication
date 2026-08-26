@@ -34,6 +34,8 @@ declare(strict_types=1);
  *      player_card($lot, '../');              // the card itself
  */
 
+require_once __DIR__ . '/player_kinds.php';
+
 if (!function_exists('player_card_styles')) {
 
     /** The stylesheet, written once however many cards a page holds. */
@@ -235,7 +237,7 @@ if (!function_exists('player_card_styles')) {
 
                     <div>
                         <div class="pc-badges">
-                            <span class="pc-badge"><?= e(pc_words($lot['role'])) ?></span>
+                            <span class="pc-badge"><?= e(player_kind((string) $lot['role'])) ?></span>
                             <?php if ((int) ($lot['is_overseas'] ?? 0) === 1): ?>
                                 <span class="pc-badge pc-badge-os">Overseas</span>
                             <?php endif; ?>

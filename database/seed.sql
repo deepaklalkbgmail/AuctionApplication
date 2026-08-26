@@ -53,17 +53,17 @@ INSERT INTO `players`
      `status`, `team_id`, `sold_price`)
 VALUES
 /* currently under the hammer */
-    (1, 1, 'Kabir Anand',   'K Anand',   'India',        'all_rounder',   'right_hand', 'right_arm_medium',  0, 1, 'Marquee', 2000000.00, 92, 2148,  74, 148.60, 7.85, 'in_auction', NULL, NULL),
+    (1, 1, 'Kabir Anand',   'K Anand',   'India',        'batting_all_rounder',   'right_hand', 'right_arm_medium',  0, 1, 'Marquee', 2000000.00, 92, 2148,  74, 148.60, 7.85, 'in_auction', NULL, NULL),
 /* queued */
     (2, 1, 'Ryan Fletcher', 'R Fletcher','Australia',    'batsman',       'left_hand',  'none',              1, 1, 'Marquee', 2000000.00, 71, 2610,   2, 141.20, 0.00, 'available',  NULL, NULL),
     (3, 1, 'Dev Sharma',    'D Sharma',  'India',        'bowler',        'right_hand', 'right_arm_fast',    0, 0, 'Set A',   1000000.00, 44,  180,  61,  96.40, 7.42, 'available',  NULL, NULL),
     (4, 1, 'Thabo Nkosi',   'T Nkosi',   'South Africa', 'wicket_keeper', 'right_hand', 'none',              1, 1, 'Set A',   1500000.00, 58, 1466,   0, 133.80, 0.00, 'available',  NULL, NULL),
-    (5, 1, 'Aarav Menon',   'A Menon',   'India',        'all_rounder',   'left_hand',  'left_arm_orthodox', 0, 0, 'Set A',    500000.00, 26,  412,  23, 127.10, 7.10, 'available',  NULL, NULL),
+    (5, 1, 'Aarav Menon',   'A Menon',   'India',        'bowling_all_rounder',   'left_hand',  'left_arm_orthodox', 0, 0, 'Set A',    500000.00, 26,  412,  23, 127.10, 7.10, 'available',  NULL, NULL),
     (6, 1, 'Jos Hartley',   'J Hartley', 'England',      'bowler',        'right_hand', 'right_arm_fast',    1, 1, 'Set B',   1200000.00, 63,  240,  88,  88.20, 8.05, 'available',  NULL, NULL),
 /* already sold */
     (7, 1, 'Vikram Rao',    'V Rao',     'India',        'batsman',       'right_hand', 'none',              0, 1, 'Marquee', 2000000.00, 108, 3204,  1, 139.90, 0.00, 'sold', 2, 3400000.00),
     (8, 1, 'Sameer Khan',   'S Khan',    'India',        'bowler',        'left_hand',  'left_arm_fast',     0, 0, 'Set A',   1000000.00,  39,   96, 52,  74.30, 7.68, 'sold', 4, 2600000.00),
-    (9, 1, 'Liam Carter',   'L Carter',  'New Zealand',  'all_rounder',   'right_hand', 'right_arm_medium',  1, 1, 'Set A',   1500000.00,  67, 1180, 45, 132.40, 8.20, 'sold', 1, 1800000.00),
+    (9, 1, 'Liam Carter',   'L Carter',  'New Zealand',  'batting_all_rounder',   'right_hand', 'right_arm_medium',  1, 1, 'Set A',   1500000.00,  67, 1180, 45, 132.40, 8.20, 'sold', 1, 1800000.00),
     (10,1, 'Nikhil Bose',   'N Bose',    'India',        'wicket_keeper', 'right_hand', 'none',              0, 0, 'Set B',    500000.00,  31,  684,  0, 124.60, 0.00, 'sold', 3, 900000.00);
 
 /* --------------------------------------------------------------- auction lots */
