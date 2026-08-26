@@ -242,9 +242,13 @@ require_once __DIR__ . '/team_card.php';
             </h2>
             <div class="mt-3 flex flex-wrap gap-2">
                 <?php foreach ($boardToCall as $row): ?>
+                    <?php /* What kind of player, not what they cost. No money
+                             at all is shown to the room — a base price is a
+                             figure like any other, and it is the floor of the
+                             price the same page is careful not to reveal. */ ?>
                     <span class="rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2 text-[13px] text-slate-300">
                         <?= e((string) $row['full_name']) ?>
-                        <span class="ml-1.5 text-[11px] text-slate-500">base <?= e(board_rupees($row['base_price'])) ?></span>
+                        <span class="ml-1.5 text-[11px] text-slate-500"><?= e(player_kind((string) $row['role'])) ?></span>
                     </span>
                 <?php endforeach; ?>
             </div>

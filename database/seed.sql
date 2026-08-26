@@ -63,7 +63,7 @@ VALUES
 /* already sold */
     (7, 1, 'Vikram Rao',    'V Rao',     'India',        'batsman',       'right_hand', 'none',              0, 1, 'Marquee', 2000000.00, 108, 3204,  1, 139.90, 0.00, 'sold', 2, 3400000.00),
     (8, 1, 'Sameer Khan',   'S Khan',    'India',        'bowler',        'left_hand',  'left_arm_fast',     0, 0, 'Set A',   1000000.00,  39,   96, 52,  74.30, 7.68, 'sold', 4, 2600000.00),
-    (9, 1, 'Liam Carter',   'L Carter',  'New Zealand',  'batting_all_rounder',   'right_hand', 'right_arm_medium',  1, 1, 'Set A',   1500000.00,  67, 1180, 45, 132.40, 8.20, 'sold', 1, 1800000.00),
+    (9, 1, 'Liam Carter',   'L Carter',  'New Zealand',  'all_rounder',   'right_hand', 'right_arm_medium',  1, 1, 'Set A',   1500000.00,  67, 1180, 45, 132.40, 8.20, 'sold', 1, 1800000.00),
     (10,1, 'Nikhil Bose',   'N Bose',    'India',        'wicket_keeper', 'right_hand', 'none',              0, 0, 'Set B',    500000.00,  31,  684,  0, 124.60, 0.00, 'sold', 3, 900000.00);
 
 /* --------------------------------------------------------------- auction lots */

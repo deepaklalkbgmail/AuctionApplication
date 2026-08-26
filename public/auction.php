@@ -217,7 +217,7 @@ if ($state === null) {
             );
 
             $boardToCall = Database::all(
-                "SELECT p.full_name, l.base_price
+                "SELECT p.full_name, p.role
                    FROM auction_lots l
                    JOIN players p ON p.id = l.player_id
                   WHERE l.tournament_id = :t AND l.status IN ('queued','live','paused')

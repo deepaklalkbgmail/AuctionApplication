@@ -502,6 +502,11 @@ is('and the squad on a team card carries no prices',
 is('no player is listed at what they went for',
     str_contains($html, '₹4,50,000</td>'), false);
 
+/* Nor is a base price. It is the floor of the price the rest of this page
+   is careful not to reveal, so the pool reads as names and kinds. */
+is('nobody still to call carries a base price',
+    str_contains($html, 'base ₹'), false);
+
 /* What board-live.js does, done here: fetch the same page again and see
    the sale that happened in between. */
 $secondLot = (int) Database::scalar(

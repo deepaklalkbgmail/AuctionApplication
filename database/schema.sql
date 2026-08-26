@@ -178,7 +178,7 @@ CREATE TABLE `users` (
     `phone`          VARCHAR(20)      NULL,
     `address`        VARCHAR(255)     NULL,
     `photo_path`     VARCHAR(255)     NULL,  /* relative to public/ */
-    `player_type`    ENUM('batsman','batting_all_rounder','bowling_all_rounder','wicket_keeper','bowler') NULL,
+    `player_type`    ENUM('batsman','batting_all_rounder','all_rounder','bowling_all_rounder','wicket_keeper','bowler') NULL,
     `password_hash`  VARCHAR(255) NOT NULL,
 /*
    Set when an administrator issues or resets a password; cleared as
@@ -278,7 +278,7 @@ CREATE TABLE `players` (
     `country`        VARCHAR(60)   NOT NULL DEFAULT 'India',
     `date_of_birth`  DATE              NULL,
 
-    `role`           ENUM('batsman','batting_all_rounder','bowling_all_rounder','wicket_keeper','bowler') NOT NULL,
+    `role`           ENUM('batsman','batting_all_rounder','all_rounder','bowling_all_rounder','wicket_keeper','bowler') NOT NULL,
     `batting_style`  ENUM('right_hand','left_hand')    NULL,
     `bowling_style`  ENUM('right_arm_fast','right_arm_medium','right_arm_offbreak',
                           'right_arm_legbreak','left_arm_fast','left_arm_medium',

@@ -332,6 +332,8 @@ is('and the two all-rounders are named apart',
     && str_contains($kindSheet, 'Bowling all-rounder'), true);
 is('never as a bare "all rounder"',
     str_contains($kindSheet, 'all rounder'), false);
+is('and plain All-rounder is still one of the kinds offered',
+    array_key_exists('all_rounder', AccountService::PLAYER_KINDS), true);
 
 $byPrice = poolOrder(http("{$base}/admin/auction.php?tournament={$tid}&sort=price", $jar)['body']);
 

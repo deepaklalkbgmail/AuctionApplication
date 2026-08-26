@@ -169,13 +169,16 @@ rejects('an invented kind of player is refused', AccountException::VALIDATION,
         'email' => 'g@club.test', 'username' => 'ggg', 'player_type' => 'twelfth_man',
     ])));
 
-/* There is no plain "all-rounder" any more. A team buying a batter who
-   bowls a few overs is not buying a fourth seamer who can bat, and one
-   word for both hid the difference while the player was being called. */
-rejects('the old undivided all-rounder is refused', AccountException::VALIDATION,
-    fn () => $accounts->register(registration([
-        'email' => 'ar@club.test', 'username' => 'ar1', 'player_type' => 'all_rounder',
-    ])));
+/* Three kinds of all-rounder. The two leaning ones exist because a batter
+   who bowls a few overs is not a fourth seamer who can bat; the plain one
+   stays for the genuine article, and for anyone who does not want to
+   claim a leaning. */
+$plainAr = $accounts->register(registration([
+    'email' => 'ar@club.test', 'username' => 'ar1', 'player_type' => 'all_rounder',
+]));
+is('a plain all-rounder is still a kind of player',
+    Database::scalar('SELECT player_type FROM users WHERE id = :id', [':id' => $plainAr]),
+    'all_rounder');
 
 $battingAr = $accounts->register(registration([
     'email' => 'bar@club.test', 'username' => 'bar1', 'player_type' => 'batting_all_rounder',
@@ -191,10 +194,11 @@ is('and a bowling all-rounder is a different thing',
     Database::scalar('SELECT player_type FROM users WHERE id = :id', [':id' => $bowlingAr]),
     'bowling_all_rounder');
 
-is('both are offered on the registration form',
-    array_slice(array_keys(\App\Services\AccountService::PLAYER_KINDS), 1, 2),
-    ['batting_all_rounder', 'bowling_all_rounder']);
-is('and neither is written as "all rounder"',
+is('all three are offered, batting through bowling',
+    array_slice(array_keys(\App\Services\AccountService::PLAYER_KINDS), 1, 3),
+    ['batting_all_rounder', 'all_rounder', 'bowling_all_rounder']);
+is('six kinds in all', count(\App\Services\AccountService::PLAYER_KINDS), 6);
+is('and none is written as "all rounder"',
     \App\Services\AccountService::PLAYER_KINDS['batting_all_rounder'], 'Batting all-rounder');
 
 rejects('a username with spaces is refused', AccountException::VALIDATION,

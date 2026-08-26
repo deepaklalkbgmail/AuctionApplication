@@ -37,19 +37,21 @@ final class AccountService
     /**
      * The kinds of cricketer, in one place, in the order they should be
      * offered and grouped everywhere: batting at one end, bowling at the
-     * other, and the two sorts of all-rounder in between.
+     * other, and the all-rounders in between.
      *
-     * There is no plain "all-rounder". A team buying a middle-order batter
-     * who bowls four overs is not buying the same player as a fourth seamer
-     * who can bat, and an auction sheet that calls both "all-rounder" hides
-     * the difference at exactly the moment it matters.
+     * Three of those. A team buying a middle-order batter who bowls four
+     * overs is not buying the same player as a fourth seamer who can bat,
+     * so those two are named apart — but plain "all-rounder" stays for the
+     * genuine article who is neither more one nor the other, and for the
+     * registering player who does not want to claim a leaning.
      *
      * Anything reading a database row must accept only these keys; the
-     * ENUMs on users.player_type and players.role hold the same five.
+     * ENUMs on users.player_type and players.role hold the same six.
      */
     public const PLAYER_KINDS = [
         'batsman'             => 'Batsman',
         'batting_all_rounder' => 'Batting all-rounder',
+        'all_rounder'         => 'All-rounder',
         'bowling_all_rounder' => 'Bowling all-rounder',
         'wicket_keeper'       => 'Wicket-keeper',
         'bowler'              => 'Bowler',
