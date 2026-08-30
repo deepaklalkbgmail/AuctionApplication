@@ -81,15 +81,24 @@
    one.
 
    Opened from the SERVER level rather than from inside a database,
-   DATABASE() is NULL. Every check would then report "missing" and every
+   DATABASE() is NULL - and if phpMyAdmin is parked on
+   information_schema after a previous query, DATABASE() is that
+   instead, which is worse: the statements below would then try to build
+   your tables inside a system schema and you would get
+
+       #1044 - Access denied ... to database 'information_schema'
+
+   Both cases stop here. Every check would then report "missing" and every
    ALTER would fail, on a database that may be perfectly fine. So we stop
    with a sentence instead.
    ===================================================================== */
 SET @db := DATABASE();
 
 SET @guard := IF(
-    @db IS NULL,
-    'SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - no database is selected. Click your database in the LEFT SIDEBAR, then open the SQL tab and paste this file again. Nothing has been changed.''',
+    @db IS NULL OR @db IN ('information_schema', 'mysql', 'performance_schema', 'sys'),
+    CONCAT('SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - the selected database is ',
+           IFNULL(@db, 'none at all'),
+           ', which is not yours. Click YOUR database in the LEFT SIDEBAR, then run this file again. Nothing has been changed.'''),
     'DO 0'
 );
 PREPARE db_guard FROM @guard;

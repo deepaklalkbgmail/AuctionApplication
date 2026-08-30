@@ -41,8 +41,10 @@
      phpMyAdmin -> click your database in the LEFT SIDEBAR first
                 -> SQL tab -> paste this whole file -> Go
 
-   IF YOU HAVE RUN IT BEFORE, CREATE TABLE IF NOT EXISTS does nothing
-   the second time and reports success. The file is safe to run twice.
+   SAFE TO RUN AS MANY TIMES AS YOU LIKE. The table is created only if
+   it is absent and the first log line only if it is not already there,
+   and every statement names your database rather than inheriting
+   whichever one phpMyAdmin happens to be showing.
    =====================================================================
 */
 
@@ -51,7 +53,8 @@
    STEP -1 — Is a database actually selected?
 
    THIS IS THE MOST COMMON WAY TO GET A WRONG ANSWER FROM THIS FILE, so
-   it is checked before anything else happens.
+   it is checked before anything else happens. A system schema counts as
+   'wrong' here, not only no schema at all.
 
    Everything below is keyed on DATABASE(). Open phpMyAdmin's SQL tab
    from the SERVER level rather than from inside a database and
@@ -68,8 +71,10 @@
 SET @db := DATABASE();
 
 SET @guard := IF(
-    @db IS NULL,
-    'SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - no database is selected. Click your database in the LEFT SIDEBAR, then open the SQL tab and run this file again. Nothing has been changed.''',
+    @db IS NULL OR @db IN ('information_schema', 'mysql', 'performance_schema', 'sys'),
+    CONCAT('SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - the selected database is ',
+           IFNULL(@db, 'none at all'),
+           ', which is not yours. Click YOUR database in the LEFT SIDEBAR, then run this file again. Nothing has been changed.'''),
     'DO 0'
 );
 PREPARE db_guard FROM @guard;
@@ -79,43 +84,62 @@ DEALLOCATE PREPARE db_guard;
 
 /* ---------------------------------------------------------------------
    1. The table.
+
+   Built as a string and prepared, so the database name is spelled out
+   rather than inherited. Run this file a second time and phpMyAdmin may
+   still be parked on "Table: TABLES" from the first run's last
+   statement, at which point a bare CREATE TABLE means
+   information_schema.activity_log and you get
+
+       #1044 - Access denied ... to database 'information_schema'
+
+   Naming the database removes the question.
    --------------------------------------------------------------------- */
-CREATE TABLE IF NOT EXISTS `activity_log` (
-    `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
-    `at`            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-    `actor_user_id` INT UNSIGNED     NULL,
-    `actor_name`    VARCHAR(120) NOT NULL DEFAULT 'system',
-    `actor_role`    VARCHAR(40)  NOT NULL DEFAULT 'system',
-
-    `action`        VARCHAR(40)  NOT NULL,
-    `subject_type`  VARCHAR(30)  NOT NULL,
-    `subject_id`    INT UNSIGNED     NULL,
-    `subject_label` VARCHAR(160) NOT NULL DEFAULT '',
-
-    `tournament_id` INT UNSIGNED     NULL,
-    `changes`       TEXT             NULL,
-    `note`          VARCHAR(255)     NULL,
-    `ip`            VARCHAR(45)      NULL,
-
-    PRIMARY KEY (`id`),
-    KEY `idx_log_at`         (`at`),
-    KEY `idx_log_tournament` (`tournament_id`, `at`),
-    KEY `idx_log_subject`    (`subject_type`, `subject_id`, `at`),
-    KEY `idx_log_actor`      (`actor_user_id`, `at`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+SET @ddl := CONCAT(
+    'CREATE TABLE IF NOT EXISTS `', @db, '`.`activity_log` (',
+        '`id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,',
+        '`at`            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,',
+        '`actor_user_id` INT UNSIGNED     NULL,',
+        '`actor_name`    VARCHAR(120) NOT NULL DEFAULT ''system'',',
+        '`actor_role`    VARCHAR(40)  NOT NULL DEFAULT ''system'',',
+        '`action`        VARCHAR(40)  NOT NULL,',
+        '`subject_type`  VARCHAR(30)  NOT NULL,',
+        '`subject_id`    INT UNSIGNED     NULL,',
+        '`subject_label` VARCHAR(160) NOT NULL DEFAULT '''',',
+        '`tournament_id` INT UNSIGNED     NULL,',
+        '`changes`       TEXT             NULL,',
+        '`note`          VARCHAR(255)     NULL,',
+        '`ip`            VARCHAR(45)      NULL,',
+        'PRIMARY KEY (`id`),',
+        'KEY `idx_log_at`         (`at`),',
+        'KEY `idx_log_tournament` (`tournament_id`, `at`),',
+        'KEY `idx_log_subject`    (`subject_type`, `subject_id`, `at`),',
+        'KEY `idx_log_actor`      (`actor_user_id`, `at`)',
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci'
+);
+PREPARE make_log FROM @ddl;
+EXECUTE make_log;
+DEALLOCATE PREPARE make_log;
 
 
 /* ---------------------------------------------------------------------
    2. A first line, so the log is never an empty screen and so you have
       a dated marker for when logging began. This is the only row this
       file writes, and it writes it to the table it just created.
+
+      Named the same way, and guarded so a second run does not add a
+      second marker.
    --------------------------------------------------------------------- */
-INSERT INTO `activity_log`
-    (`actor_name`, `actor_role`, `action`, `subject_type`, `subject_label`, `note`)
-SELECT 'system', 'system', 'log.enabled', 'system', 'Activity log',
-       'Logging switched on. Changes made before this line were not recorded.'
- WHERE NOT EXISTS (SELECT 1 FROM `activity_log` WHERE `action` = 'log.enabled');
+SET @ddl := CONCAT(
+    'INSERT INTO `', @db, '`.`activity_log` ',
+        '(`actor_name`, `actor_role`, `action`, `subject_type`, `subject_label`, `note`) ',
+    'SELECT ''system'', ''system'', ''log.enabled'', ''system'', ''Activity log'', ',
+           '''Logging switched on. Changes made before this line were not recorded.'' ',
+     'WHERE NOT EXISTS (SELECT 1 FROM `', @db, '`.`activity_log` WHERE `action` = ''log.enabled'')'
+);
+PREPARE first_line FROM @ddl;
+EXECUTE first_line;
+DEALLOCATE PREPARE first_line;
 
 
 /* ---------------------------------------------------------------------
@@ -131,14 +155,17 @@ SELECT 'system', 'system', 'log.enabled', 'system', 'Activity log',
 
    in an earlier migration.
    --------------------------------------------------------------------- */
-SELECT 'lines recorded so far' AS `check`,
-       CAST(COUNT(*) AS CHAR) AS `result` FROM `activity_log`
-UNION ALL
-SELECT 'your players (unchanged by this file)',
-       CAST(COUNT(*) AS CHAR) FROM `players`
-UNION ALL
-SELECT 'your sold lots (unchanged by this file)',
-       CAST(COUNT(*) AS CHAR) FROM `auction_lots` WHERE `status` = 'sold';
+SET @ddl := CONCAT(
+    'SELECT ''lines recorded so far'' AS `check`, CAST(COUNT(*) AS CHAR) AS `result` ',
+      'FROM `', @db, '`.`activity_log` ',
+    'UNION ALL SELECT ''your players (unchanged by this file)'', CAST(COUNT(*) AS CHAR) ',
+      'FROM `', @db, '`.`players` ',
+    'UNION ALL SELECT ''your sold lots (unchanged by this file)'', CAST(COUNT(*) AS CHAR) ',
+      'FROM `', @db, '`.`auction_lots` WHERE `status` = ''sold'''
+);
+PREPARE counts FROM @ddl;
+EXECUTE counts;
+DEALLOCATE PREPARE counts;
 
 
 SELECT 'activity_log exists' AS `check`,
