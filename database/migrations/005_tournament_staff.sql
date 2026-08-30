@@ -56,17 +56,17 @@
      phpMyAdmin -> click your database in the LEFT SIDEBAR first
                 -> SQL tab -> paste this whole file -> Go
 
-   No statement here depends on any other having run in the same
-   connection, so running them one at a time works exactly as well as
-   pasting the lot.
+   PASTE THE WHOLE FILE. Steps 1 to 4 each use a variable to hold the
+   statement they may or may not need to run, and a variable lives on one
+   connection only — so if you do run pieces separately, keep the four
+   lines of a step (SET, PREPARE, EXECUTE, DEALLOCATE) together in the
+   same submission.
 
-   IF YOU HAVE RUN IT BEFORE you will see one of these, and both are
-   harmless — they mean that part is already in place:
-
-       #1060 - Duplicate column name 'tournament_id'
-       #1061 - Duplicate key name 'idx_users_tournament'
-
-   The whole file is safe to run twice.
+   SAFE TO RUN AS MANY TIMES AS YOU LIKE, and safe to run again after a
+   run that stopped part way. Every structural step checks whether it is
+   already in place and quietly skips itself, so a re-run raises no
+   errors and stops nowhere. If you are not sure whether it took, run it
+   again and read the checks at the end.
    =====================================================================
 */
 
@@ -90,30 +90,70 @@ UNION ALL SELECT 'BEFORE', 'auction bids',       CAST(COUNT(*) AS CHAR) FROM `au
 UNION ALL SELECT 'BEFORE', 'total sold for',     CONCAT('INR ', IFNULL(FORMAT(SUM(`sold_price`), 0), '0')) FROM `players`;
 
 
+/* =====================================================================
+   STEPS 1-4 — the structural changes.
+
+   Each one LOOKS FIRST and skips itself if it is already in place, so
+   this file never raises an error and never stops half way through.
+   That matters more than it sounds: phpMyAdmin halts the whole batch at
+   the first error, so a step that announced "already done" by failing
+   would take every step after it down with it.
+
+   Each step is four lines — SET, PREPARE, EXECUTE, DEALLOCATE. If you
+   run statements one at a time rather than pasting the whole file, KEEP
+   THE FOUR LINES OF A STEP TOGETHER: the SET puts the statement into
+   @ddl and the PREPARE reads it back, and a variable does not survive
+   being submitted separately.
+
+   'DO 0' is MySQL's way of saying "do nothing". It is what runs when a
+   piece is already there.
+   ===================================================================== */
+
+
 /* ---------------------------------------------------------------------
-   STEP 1. The new role. MODIFY is safe to repeat — it simply restates
-   the column, so running this twice does nothing the second time.
+   STEP 1. The new role, 'tournament_admin'.
    --------------------------------------------------------------------- */
-ALTER TABLE `users`
-    MODIFY COLUMN `role`
-        ENUM('admin','tournament_admin','team_owner','scorer','viewer','player')
-        NOT NULL DEFAULT 'viewer';
+SET @ddl := IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+        AND COLUMN_NAME = 'role' AND COLUMN_TYPE LIKE '%tournament\\_admin%') > 0,
+    'DO 0',
+    'ALTER TABLE `users` MODIFY COLUMN `role` ENUM(''admin'',''tournament_admin'',''team_owner'',''scorer'',''viewer'',''player'') NOT NULL DEFAULT ''viewer'''
+);
+PREPARE step1 FROM @ddl;
+EXECUTE step1;
+DEALLOCATE PREPARE step1;
 
 
 /* ---------------------------------------------------------------------
    STEP 2. Which tournament a scorer or tournament administrator belongs
-   to. #1060 here means it is already there.
+   to. This is the step that used to fail with #1060 on a second run.
    --------------------------------------------------------------------- */
-ALTER TABLE `users`
-    ADD COLUMN `tournament_id` INT UNSIGNED NULL AFTER `team_id`;
+SET @ddl := IF(
+    (SELECT COUNT(*) FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+        AND COLUMN_NAME = 'tournament_id') > 0,
+    'DO 0',
+    'ALTER TABLE `users` ADD COLUMN `tournament_id` INT UNSIGNED NULL AFTER `team_id`'
+);
+PREPARE step2 FROM @ddl;
+EXECUTE step2;
+DEALLOCATE PREPARE step2;
 
 
 /* ---------------------------------------------------------------------
    STEP 3. An index for "everyone who works on this tournament".
-   #1061 here means it is already there.
    --------------------------------------------------------------------- */
-ALTER TABLE `users`
-    ADD KEY `idx_users_tournament` (`tournament_id`, `role`);
+SET @ddl := IF(
+    (SELECT COUNT(*) FROM information_schema.STATISTICS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+        AND INDEX_NAME = 'idx_users_tournament') > 0,
+    'DO 0',
+    'ALTER TABLE `users` ADD KEY `idx_users_tournament` (`tournament_id`, `role`)'
+);
+PREPARE step3 FROM @ddl;
+EXECUTE step3;
+DEALLOCATE PREPARE step3;
 
 
 /* ---------------------------------------------------------------------
@@ -122,12 +162,17 @@ ALTER TABLE `users`
    ON DELETE SET NULL, not RESTRICT: deleting a tournament should not be
    blocked by the staff attached to it, and it should not delete their
    accounts either. They simply become unassigned.
-   An error 1826 or 121 here means it is already there.
    --------------------------------------------------------------------- */
-ALTER TABLE `users`
-    ADD CONSTRAINT `fk_users_tournament`
-        FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
-        ON DELETE SET NULL ON UPDATE CASCADE;
+SET @ddl := IF(
+    (SELECT COUNT(*) FROM information_schema.TABLE_CONSTRAINTS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users'
+        AND CONSTRAINT_NAME = 'fk_users_tournament') > 0,
+    'DO 0',
+    'ALTER TABLE `users` ADD CONSTRAINT `fk_users_tournament` FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`) ON DELETE SET NULL ON UPDATE CASCADE'
+);
+PREPARE step4 FROM @ddl;
+EXECUTE step4;
+DEALLOCATE PREPARE step4;
 
 
 /* =====================================================================
