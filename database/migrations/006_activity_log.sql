@@ -145,27 +145,31 @@ DEALLOCATE PREPARE first_line;
 /* ---------------------------------------------------------------------
    3. Check.
 
-   Two statements, and the order matters. The one that reads your own
-   tables runs FIRST, while the current database is still yours; the one
-   that reads information_schema runs LAST, so nothing follows it that
-   could be caught out by phpMyAdmin switching the panel to
-   "Table: TABLES" afterwards. That is the trap that produced
+   Two plain statements, and the ORDER MATTERS twice over.
 
-       #1109 - Unknown table 'users' in information_schema
+   The one reading your own tables runs FIRST, while the current database
+   is still yours. The one reading information_schema runs LAST, so
+   nothing follows it to be caught out by phpMyAdmin switching the panel
+   to "Table: TABLES".
 
-   in an earlier migration.
+   Neither is a prepared statement, on purpose. phpMyAdmin cannot parse
+   EXECUTE, so a prepared statement that RETURNS ROWS makes it emit
+
+       Undefined array key "statement"   (and two more like it)
+
+   while it tries to build the sort links. Harmless, but alarming. A
+   prepared statement is only needed when the database name has to appear
+   as a TABLE name; as a value in a WHERE clause, as below, plain SQL
+   does the job.
    --------------------------------------------------------------------- */
-SET @ddl := CONCAT(
-    'SELECT ''lines recorded so far'' AS `check`, CAST(COUNT(*) AS CHAR) AS `result` ',
-      'FROM `', @db, '`.`activity_log` ',
-    'UNION ALL SELECT ''your players (unchanged by this file)'', CAST(COUNT(*) AS CHAR) ',
-      'FROM `', @db, '`.`players` ',
-    'UNION ALL SELECT ''your sold lots (unchanged by this file)'', CAST(COUNT(*) AS CHAR) ',
-      'FROM `', @db, '`.`auction_lots` WHERE `status` = ''sold'''
-);
-PREPARE counts FROM @ddl;
-EXECUTE counts;
-DEALLOCATE PREPARE counts;
+SELECT 'lines recorded so far' AS `check`,
+       CAST(COUNT(*) AS CHAR) AS `result` FROM `activity_log`
+UNION ALL
+SELECT 'your players (unchanged by this file)',
+       CAST(COUNT(*) AS CHAR) FROM `players`
+UNION ALL
+SELECT 'your sold lots (unchanged by this file)',
+       CAST(COUNT(*) AS CHAR) FROM `auction_lots` WHERE `status` = 'sold';
 
 
 SELECT 'activity_log exists' AS `check`,

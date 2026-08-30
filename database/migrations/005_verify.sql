@@ -1,131 +1,157 @@
 /*
    =====================================================================
-   Where does migration 005 actually stand?
+   Where do migrations 005 and 006 stand, and did the data move?
    =====================================================================
 
-   READ-ONLY. This file changes nothing. Run it any time.
+   READ-ONLY. This file changes nothing. Run it any time - before a
+   migration, after one, or when you are simply not sure.
 
    ---------------------------------------------------------------------
-   IT NAMES YOUR DATABASE ON THE FIRST LINE, ON PURPOSE
+   HOW TO RUN IT
+     phpMyAdmin -> click your database in the LEFT SIDEBAR first
+                -> SQL tab -> paste this whole file -> Go
 
-   The obvious way to write this check is to key it on DATABASE(). That
-   is a trap: open phpMyAdmin's SQL tab from the SERVER level rather than
-   from inside a database and DATABASE() is NULL, every row reports
-   "NO", and a database that is perfectly fine looks like one that was
-   never migrated.
+   Nothing here is a prepared statement. phpMyAdmin cannot parse
+   EXECUTE, so a prepared statement that returns rows makes it print
 
-   So the database name is typed in below instead. Set it once, and the
-   answer cannot depend on where you happened to click.
+       Warning ... Undefined array key "statement"
+       Warning ... Undefined array key "parser"
+       Warning ... Attempt to read property "list" on null
 
-   >>> EDIT THIS LINE if your database is not called deamco_APL <<<
+   while it tries to build the column sort links. The rows come back
+   anyway, but it reads like something broke. Plain SQL avoids it, and
+   plain SQL is enough here: the database name is only ever compared as a
+   VALUE, never used as a table name.
+
+   ---------------------------------------------------------------------
+   READING THE RESULT
+
+   Three tables come back.
+
+     1. what is installed   every row should read 'yes' once both
+                            migrations have run
+     2. your data           run this before AND after a migration; every
+                            number must be identical. 'reclassified as
+                            tournament_admin' must read 0 until you
+                            deliberately create one
+     3. who works on what   anybody shown as NOT ASSIGNED cannot score or
+                            administer until you give them a tournament
+                            under Administration -> People -> Set
    =====================================================================
 */
-SET @db := 'deamco_APL';
 
 
-/* ---------------------------------------------------------------------
-   The report.
+/* =====================================================================
+   STEP 0 - Refuse to answer about the wrong database.
 
-   'yes' on all four = migration 005 is fully installed.
-   Any 'NO'          = run 005_tournament_staff.sql again; it will add
-                       only the missing pieces and skip the rest.
+   Everything below is keyed on DATABASE(). Open the SQL tab from the
+   SERVER level and DATABASE() is NULL; land on it straight after a query
+   that read information_schema and DATABASE() is that instead. Either
+   way every row would read 'no' for a database that is perfectly fine -
+   which is exactly the false alarm this file exists to prevent.
 
-   'database exists' reading NO means the name on the line above is
-   wrong — check the spelling against the left sidebar. It is
-   case-sensitive on most servers.
-   --------------------------------------------------------------------- */
-SELECT 'database exists' AS piece,
-       IF(COUNT(*) = 1, CONCAT('yes  (', @db, ')'), CONCAT('NO  - no database called "', @db, '"')) AS present
-  FROM information_schema.SCHEMATA WHERE SCHEMA_NAME = @db
+   This is the one prepared statement in the file, and it returns no
+   rows, so phpMyAdmin has nothing to choke on.
+   ===================================================================== */
+SET @db := DATABASE();
 
+SET @guard := IF(
+    @db IS NULL OR @db IN ('information_schema', 'mysql', 'performance_schema', 'sys'),
+    CONCAT('SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - the selected database is ',
+           IFNULL(@db, 'none at all'),
+           ', which is not yours. Click YOUR database in the LEFT SIDEBAR, then run this file again.'''),
+    'DO 0'
+);
+PREPARE db_guard FROM @guard;
+EXECUTE db_guard;
+DEALLOCATE PREPARE db_guard;
+
+
+/* =====================================================================
+   1 - YOUR DATA.
+
+   This runs FIRST, on purpose. It reads your own tables, and it has to
+   do that while the current database is still yours - the checks in
+   part 3 read information_schema, and phpMyAdmin follows the query.
+
+   Run this file before and after a migration and compare. Nothing here
+   should change: the migrations add a column and a table, they do not
+   add, remove or reclassify a single row.
+   ===================================================================== */
+SELECT 'users'                            AS item, CAST(COUNT(*) AS CHAR) AS n FROM `users`
+UNION ALL SELECT '  of them admins',            CAST(COUNT(*) AS CHAR) FROM `users` WHERE `role` = 'admin'
+UNION ALL SELECT '  of them owners',            CAST(COUNT(*) AS CHAR) FROM `users` WHERE `role` = 'team_owner'
+UNION ALL SELECT '  of them scorers',           CAST(COUNT(*) AS CHAR) FROM `users` WHERE `role` = 'scorer'
+UNION ALL SELECT 'reclassified as tournament_admin',
+                                                CAST(COUNT(*) AS CHAR) FROM `users` WHERE `role` = 'tournament_admin'
+UNION ALL SELECT 'tournaments',                 CAST(COUNT(*) AS CHAR) FROM `tournaments`
+UNION ALL SELECT 'teams',                       CAST(COUNT(*) AS CHAR) FROM `teams`
+UNION ALL SELECT 'players',                     CAST(COUNT(*) AS CHAR) FROM `players`
+UNION ALL SELECT '  of them sold',              CAST(COUNT(*) AS CHAR) FROM `players` WHERE `status` = 'sold'
+UNION ALL SELECT 'auction lots',                CAST(COUNT(*) AS CHAR) FROM `auction_lots`
+UNION ALL SELECT 'auction bids',                CAST(COUNT(*) AS CHAR) FROM `auction_bids`
+UNION ALL SELECT 'total sold for',
+                 CONCAT('INR ', IFNULL(FORMAT(SUM(`sold_price`), 0), '0')) FROM `players`;
+
+
+/* =====================================================================
+   2 - WHO WORKS ON WHAT.
+
+   Still your own tables, so still before part 3.
+   An empty result means you have no scorers or tournament
+   administrators yet, which is fine.
+   ===================================================================== */
+SELECT u.`id`,
+       u.`name`,
+       u.`role`,
+       IFNULL(t.`name`, '*** NOT ASSIGNED ***') AS `tournament`
+  FROM `users` u
+  LEFT JOIN `tournaments` t ON t.`id` = u.`tournament_id`
+ WHERE u.`role` IN ('scorer', 'tournament_admin')
+ ORDER BY u.`id`;
+
+
+/* =====================================================================
+   3 - WHAT IS INSTALLED.
+
+   LAST, because these read information_schema and phpMyAdmin will
+   switch the panel to "Table: COLUMNS" afterwards. Nothing follows
+   them, so nothing can be caught out by it.
+
+   All seven 'yes' = both migrations are fully installed.
+   Any 'no'        = run that migration again; it adds only the missing
+                     pieces and skips the rest.
+   ===================================================================== */
+SELECT 'database being checked' AS piece, @db AS present
 UNION ALL
 SELECT 'users table',
-       IF(COUNT(*) = 1, 'yes', 'NO')
+       IF(COUNT(*) = 1, 'yes', 'no')
   FROM information_schema.TABLES
  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users'
-
 UNION ALL
-SELECT 'role has tournament_admin',
-       IFNULL(MAX(IF(COLUMN_TYPE LIKE '%tournament\\_admin%', 'yes', 'NO')), 'NO - no such column')
+SELECT '005: role has tournament_admin',
+       IF(COUNT(*) = 1, 'yes', 'no')
   FROM information_schema.COLUMNS
  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'
-
+   AND COLUMN_TYPE LIKE '%tournament\\_admin%'
 UNION ALL
-SELECT 'tournament_id column',
-       IF(COUNT(*) = 1, 'yes', 'NO')
+SELECT '005: tournament_id column',
+       IF(COUNT(*) = 1, 'yes', 'no')
   FROM information_schema.COLUMNS
  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND COLUMN_NAME = 'tournament_id'
-
 UNION ALL
-SELECT 'index idx_users_tournament',
-       IF(COUNT(*) > 0, 'yes', 'NO')
+SELECT '005: index idx_users_tournament',
+       IF(COUNT(*) > 0, 'yes', 'no')
   FROM information_schema.STATISTICS
  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND INDEX_NAME = 'idx_users_tournament'
-
 UNION ALL
-SELECT 'foreign key fk_users_tournament',
-       IF(COUNT(*) = 1, 'yes', 'NO')
+SELECT '005: foreign key fk_users_tournament',
+       IF(COUNT(*) = 1, 'yes', 'no')
   FROM information_schema.TABLE_CONSTRAINTS
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND CONSTRAINT_NAME = 'fk_users_tournament'
-
+ WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users'
+   AND CONSTRAINT_NAME = 'fk_users_tournament'
 UNION ALL
-SELECT 'activity_log table (migration 006)',
-       IF(COUNT(*) = 1, 'yes', 'NO - run 006_activity_log.sql')
+SELECT '006: activity_log table',
+       IF(COUNT(*) = 1, 'yes', 'no')
   FROM information_schema.TABLES
  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'activity_log';
-
-/* ---------------------------------------------------------------------
-   Your data, so this file also serves as the before-and-after check.
-
-   Run it BEFORE the migration and again AFTER. Every number must be
-   identical: the migration adds a column, it does not add, remove or
-   reclassify a single row.
-
-   'reclassified as tournament_admin' is the ENUM check. MySQL stores an
-   ENUM as a position, and migration 005 inserts 'tournament_admin' at
-   position 2, moving every role after it along by one. MySQL converts
-   by text rather than by position, so nothing is reclassified - this
-   line proves it on your own data, and must read 0 until you actually
-   create a tournament administrator.
-
-   Fully qualified with @db, like everything above, so it does not
-   matter which database phpMyAdmin currently thinks is selected.
-   --------------------------------------------------------------------- */
-SET @counts := CONCAT(
-    'SELECT ''users'' AS item, CAST(COUNT(*) AS CHAR) AS n FROM `', @db, '`.`users` ',
-    'UNION ALL SELECT ''  of them admins'',  CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''admin'' ',
-    'UNION ALL SELECT ''  of them owners'',  CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''team_owner'' ',
-    'UNION ALL SELECT ''  of them scorers'', CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''scorer'' ',
-    'UNION ALL SELECT ''reclassified as tournament_admin'', CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''tournament_admin'' ',
-    'UNION ALL SELECT ''tournaments'',   CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`tournaments` ',
-    'UNION ALL SELECT ''teams'',         CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`teams` ',
-    'UNION ALL SELECT ''players'',       CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`players` ',
-    'UNION ALL SELECT ''  of them sold'', CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`players` WHERE `status` = ''sold'' ',
-    'UNION ALL SELECT ''auction lots'',   CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`auction_lots` ',
-    'UNION ALL SELECT ''auction bids'',   CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`auction_bids` ',
-    'UNION ALL SELECT ''total sold for'', CONCAT(''INR '', IFNULL(FORMAT(SUM(`sold_price`), 0), ''0'')) FROM `', @db, '`.`players`'
-);
-PREPARE counts FROM @counts;
-EXECUTE counts;
-DEALLOCATE PREPARE counts;
-
-
-/* ---------------------------------------------------------------------
-   Who works on which tournament.
-
-   Anybody listed as NOT ASSIGNED cannot score or administer until you
-   give them a tournament under Administration -> People -> Set.
-   An empty result means you have no scorers or tournament
-   administrators yet.
-   --------------------------------------------------------------------- */
-SET @staff := CONCAT(
-    'SELECT u.`id`, u.`name`, u.`role`, ',
-           'IFNULL(t.`name`, ''*** NOT ASSIGNED ***'') AS `tournament` ',
-      'FROM `', @db, '`.`users` u ',
-      'LEFT JOIN `', @db, '`.`tournaments` t ON t.`id` = u.`tournament_id` ',
-     'WHERE u.`role` IN (''scorer'', ''tournament_admin'') ',
-     'ORDER BY u.`id`'
-);
-PREPARE staff FROM @staff;
-EXECUTE staff;
-DEALLOCATE PREPARE staff;
