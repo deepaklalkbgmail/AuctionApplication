@@ -505,15 +505,42 @@ every failure above.
 
 ## Updating later
 
-**With Git Version Control:** Manage → Update from Remote → Deploy HEAD Commit.
+### The order is: back up, migrate, then upload
 
-**Manually:** upload the changed files. Never overwrite `.env`.
+**Database first, files second.** Not the other way round, and this is not a
+matter of taste — it was tested both ways:
 
-If a release changes the schema, back up the database first, then apply the
-migration from `database/migrations/` in numerical order. There is no
-migration runner yet — they are hand-applied through phpMyAdmin. Each one is
-additive and safe to run on a database that already holds a season; none of
-them drops anything.
+| Order | What happens |
+|-------|--------------|
+| Migrations, **then** files | The old code runs fine against the new schema. Every screen tested: HTTP 200, no errors. **Nobody notices anything.** |
+| Files, **then** migrations | **Sign-in breaks for everyone**, with `Unknown column 'tournament_id'`. The site is down until the migration is run. |
+
+The reason is simple: a migration that only *adds* a column or widens an
+ENUM is invisible to code that does not know about it, because the old
+queries name their columns. New code asking for a column that is not there
+yet is a hard error on the first query it runs — which, for release 005, is
+the one that signs you in.
+
+So the safe window is between the migration and the upload, and in that
+window the site keeps working normally.
+
+### The steps
+
+1. **Back up.** phpMyAdmin → select the database in the left sidebar →
+   **Export** → **Go**. Keep the file. Everything below is additive, but a
+   backup is what makes that claim testable rather than trusted.
+2. **Run the migrations**, in numerical order, one file at a time, through
+   phpMyAdmin's SQL tab with the database selected in the left sidebar. Each
+   file prints its own before/after check — read it before running the next.
+3. **Upload the files.**
+   - With Git Version Control: Manage → Update from Remote → Deploy HEAD Commit.
+   - Manually: upload the changed files. **Never overwrite `.env`.**
+4. **Check.** Sign in, open the screens the release touched, and confirm the
+   counts the migration printed still match.
+
+Each migration is additive and safe to run on a database that already holds
+a season; none of them drops anything, and re-running one reports that the
+work is already done rather than repeating it.
 
 ---
 
