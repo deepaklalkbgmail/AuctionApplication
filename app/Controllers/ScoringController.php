@@ -8,13 +8,15 @@ use App\Core\Auth;
 use App\Core\Security;
 use App\Exceptions\ScoringException;
 use App\Services\ScoringService;
+use Database;
 use Throwable;
 
 /**
  * HTTP surface for ball-by-ball scoring.
  *
- * Writes are limited to the scorer and the admin. Reads are open to anyone
- * signed in, so a viewer's scorecard can poll the same endpoint.
+ * Writes are limited to the admin and to a scorer working on the tournament
+ * the innings belongs to. Reads are open to anyone signed in, so a viewer's
+ * scorecard can poll the same endpoint.
  *
  * Every response is the complete scorecard, not a delta: the client replaces
  * its state wholesale and can never drift from the database. At roughly 120
@@ -33,6 +35,7 @@ final class ScoringController
         $this->requirePost();
         Auth::require(Auth::ROLE_SCORER, Auth::ROLE_ADMIN);
         $this->requireCsrf();
+        $this->requireOwnTournament($this->intInput('innings_id'));
 
         $input = [
             'runs_off_bat'        => $this->optionalInt('runs_off_bat') ?? 0,
@@ -61,6 +64,7 @@ final class ScoringController
         $this->requirePost();
         Auth::require(Auth::ROLE_SCORER, Auth::ROLE_ADMIN);
         $this->requireCsrf();
+        $this->requireOwnTournament($this->intInput('innings_id'));
 
         $this->send($this->scoring->undoLastBall($this->intInput('innings_id'), Auth::user()['id'] ?? null));
     }
@@ -91,6 +95,47 @@ final class ScoringController
     }
 
     // -----------------------------------------------------------------
+
+    /**
+     * A scorer scores one tournament: the one on their account.
+     *
+     * The tournament is read from the innings itself, never from the form,
+     * because innings_id is the only thing the client sends and anything
+     * derived from the client can be edited. Without this, a scorer could
+     * point the pad at another tournament's innings and write into it.
+     *
+     * An administrator passes every time; worksOn() says so.
+     */
+    private function requireOwnTournament(int $inningsId): void
+    {
+        if (Auth::is(Auth::ROLE_ADMIN)) {
+            return;
+        }
+
+        $tournamentId = Database::scalar(
+            'SELECT m.tournament_id
+               FROM innings i
+               JOIN matches m ON m.id = i.match_id
+              WHERE i.id = :id',
+            [':id' => $inningsId]
+        );
+
+        // An unknown innings is a 404 rather than a 403: refusing it as
+        // "not yours" would tell a scorer which ids exist elsewhere.
+        if ($tournamentId === null) {
+            $this->fail('NOT_FOUND', 'That innings does not exist.', 404);
+        }
+
+        if (!Auth::worksOn((int) $tournamentId)) {
+            $this->fail(
+                'WRONG_TOURNAMENT',
+                Auth::tournamentId() === null
+                    ? 'Your account is not assigned to a tournament yet. Ask an administrator to set one.'
+                    : 'This match belongs to another tournament. You can only score your own.',
+                403
+            );
+        }
+    }
 
     private function requirePost(): void
     {

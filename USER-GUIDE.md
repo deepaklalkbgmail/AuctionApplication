@@ -12,7 +12,7 @@ them before the auction than during it.
 ## Contents
 
 1. [What this application is](#1-what-this-application-is)
-2. [The five roles](#2-the-five-roles)
+2. [The six roles](#2-the-six-roles)
 3. [How a season runs, start to finish](#3-how-a-season-runs-start-to-finish)
 4. [Signing in](#4-signing-in)
 5. [Player](#5-player)
@@ -60,18 +60,40 @@ Everything runs in a web browser. There is nothing to install.
 
 ---
 
-## 2. The five roles
+## 2. The six roles
 
 | Role | Who | Can do | How the account is made |
 |------|-----|--------|--------------------------|
 | **Viewer** | Anyone | Watch the auction board and the live scorecard | No account needed |
 | **Player** | Anyone who wants to be auctioned | Register, join a tournament with its code, keep their details current | Registers themselves; an administrator approves |
 | **Team Owner** | One per franchise | Name their team, bid for players, see their purse and squad | An administrator creates the team and names the owner |
-| **Scorer** | One per match | Record every ball | An administrator creates it and hands over the credentials |
-| **Administrator** | Tournament director | Everything: approvals, tournaments, teams, the hammer | Created with the database, or by another administrator |
+| **Scorer** | Any number per tournament | Record every ball of **their own tournament's** matches | An administrator creates it, picks the tournament, and hands over the credentials |
+| **Tournament Administrator** | One tournament each | Everything inside **their own tournament**: applications, players, teams, the auction | An administrator creates it and picks the tournament |
+| **Administrator** | Tournament director | Everything, across every tournament, plus approving accounts | Created with the database, or by another administrator |
 
 **One team has exactly one owner.** The database enforces it, not just the
 screens — two accounts cannot hold the same team.
+
+### Who is scoped to what
+
+A **scorer** and a **tournament administrator** each belong to exactly one
+tournament, and see nothing outside it. The list of tournaments they are
+offered is narrowed to theirs, and — this is the part that matters — the id
+in the address bar is checked too. Editing `?tournament=` to somebody else's
+number gets a 403, and so does posting a ball into another tournament's
+innings.
+
+Two things stay an **administrator's** alone:
+
+- **Approving a person's account** after they register. A tournament
+  administrator approves people into *their tournament*; whether the account
+  exists at all is a decision above them.
+- **Creating, editing and cancelling tournaments**, and creating accounts.
+
+Any number of scorers may share one tournament, so two people can work
+alternate matches. A scorer who has not been given a tournament yet can still
+sign in and read a scorecard — the pad simply tells them to ask an
+administrator.
 
 **A team owner may also be a player.** It is not required. An owner who wants
 to be auctioned applies to the tournament like anybody else, and is approved
@@ -301,7 +323,40 @@ you set at the moment of approval:
 the back of the queue. The moment you press it they are in the auction list.
 **Reject** creates nothing; the player may apply again.
 
-### 6.4 Creating teams and naming owners
+### 6.4 Correcting a player after you have approved them
+
+**Administration → Players.**
+
+Approval is a decision made in about four seconds while somebody is waiting,
+so it is going to be wrong sometimes. This screen is where you fix it. Click
+a name to open their details:
+
+| Field | Notes |
+|-------|-------|
+| Full name, short name | The short name is what the scorecard prints |
+| Country | Shown on the player card |
+| Type of player | Batsman, batting all-rounder, all-rounder, bowling all-rounder, wicket-keeper, bowler |
+| Batting and bowling style | Optional; shown on the player card |
+| Auction set | Marquee, Set A … The auction sheet can sort by it |
+| Base price | **See below** |
+| Overseas, capped | Overseas counts against the tournament's limit |
+| Matches, runs, wickets, strike rate, economy | The career figures on the auction card |
+
+**Use this screen for the base price rather than the database.** The figure
+lives in two places — the player and their auction lot — and changing one
+without the other leaves the auction sheet bidding from the old number. This
+screen changes both together.
+
+**The base price is fixed once a lot has been called.** Up until then it is
+just a number nobody has acted on and you can move it freely. After that the
+figure is part of a sale, and the screen says so rather than letting you
+create a contradiction. The same goes for the overseas flag: once a player
+has been bought, their team's overseas count is already set.
+
+Everything that is *not* money stays editable throughout — a misspelled name
+should not have to wait for the auction to finish.
+
+### 6.4a Creating teams and naming owners
 
 **Administration → Teams.**
 
@@ -316,13 +371,32 @@ is for.
 **Assign** hands a team to a different owner. The outgoing owner is released
 in the same step, because one team may only ever have one owner.
 
-### 6.5 Creating scorer accounts
+**Save team details** edits everything the team was created with: its name,
+short name, colour, home ground — and, for an administrator, its purse. A
+deadline that has passed does not stop an administrator; that is the point of
+having one.
+
+The purse cannot be set below what the team has already spent at the auction.
+You would be asking the database for a team that has overspent, and it will
+not have it. Sell somebody first, or raise the figure instead.
+
+### 6.5 Creating scorers and tournament administrators
 
 **Administration → People → Create a scorer or administrator.**
 
 Fill in a name, a username, an email and the role. Leave the password blank
 and one is generated — two four-character groups with none of the confusable
 characters in them, so it can be read down a phone line.
+
+**A scorer and a tournament administrator must be given a tournament.** The
+form asks for one and will not save without it, because both roles are
+defined by which tournament they belong to. Any number of scorers can share
+the same tournament.
+
+To move somebody later, or to take a tournament away, use **Set tournament**
+on their row. A scorer with no tournament keeps their account and loses the
+pad, which is the right way round: taking somebody off a tournament should
+not delete them.
 
 The credentials appear once, on the next screen. **They are not stored
 anywhere readable**, so write them down or send them before you navigate
@@ -521,6 +595,17 @@ Check the badge at the top:
 - **Saving** — every ball is being written to the database
 - **Demo** — you are on the demonstration match; nothing is saved. Sign in as
   the scorer, and confirm with your administrator that a live match exists
+
+**You score one tournament: yours.** If the pad shows an amber **Read only**
+bar, one of two things is true, and the bar says which:
+
+- *This match belongs to a different tournament.* You can follow it — a
+  scorecard is public — but not record anything on it.
+- *Your account is not assigned to a tournament yet.* Ask an administrator to
+  set one under **Administration → People**.
+
+This is enforced where the writing happens, not only on the screen: a ball
+aimed at another tournament's innings is refused whatever it was sent from.
 
 ### 8.2 The pad
 

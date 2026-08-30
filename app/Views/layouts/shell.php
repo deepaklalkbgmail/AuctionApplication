@@ -45,7 +45,7 @@ function home_for_role(?string $role, string $up = ''): string
 {
     return $up . match ($role) {
         Auth::ROLE_SCORER => 'score.php',
-        Auth::ROLE_ADMIN  => 'admin/index.php',
+        Auth::ROLE_ADMIN, Auth::ROLE_TADMIN => 'admin/index.php',
         Auth::ROLE_PLAYER => 'profile.php',
         Auth::ROLE_OWNER  => 'team.php',
         default           => 'auction.php',
@@ -202,12 +202,16 @@ function field(
         <label for="<?= e($id) ?>" class="mb-1.5 block text-[11px] font-bold uppercase tracking-wider text-slate-400">
             <?= e($label) ?><?php if (!$required): ?><span class="ml-1 font-medium normal-case tracking-normal text-slate-600">optional</span><?php endif; ?>
         </label>
+        <?php // A colour input paints its own swatch and ignores padding, so
+              // the text-field measurements leave it a hairline. Give it a
+              // height instead, and it reads as the swatch it is. ?>
         <input id="<?= e($id) ?>" name="<?= e($name) ?>" type="<?= e($type) ?>"
                value="<?= e($value) ?>"
                <?= $required ? 'required' : '' ?>
                <?= $readonly ? 'readonly' : '' ?>
                <?= $placeholder !== '' ? 'placeholder="' . e($placeholder) . '"' : '' ?>
-               class="w-full rounded-xl border border-white/10 px-3.5 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20 <?=
+               class="w-full rounded-xl border border-white/10 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-emerald-400/50 focus:ring-2 focus:ring-emerald-400/20 <?=
+                   $type === 'color' ? 'h-[42px] cursor-pointer p-1' : 'px-3.5 py-2.5' ?> <?=
                    $readonly ? 'cursor-not-allowed bg-slate-900/60 text-slate-500' : 'bg-slate-950/60' ?>">
         <?php if ($hint !== ''): ?>
             <p class="mt-1.5 text-[11px] text-slate-500"><?= e($hint) ?></p>

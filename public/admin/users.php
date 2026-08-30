@@ -69,9 +69,23 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                         // Blank means "generate one" — which is the better
                         // habit, so the field is optional.
                         trim((string) ($_POST['password'] ?? '')) !== ''
-                            ? (string) $_POST['password'] : null
+                            ? (string) $_POST['password'] : null,
+                        // Required for a scorer and a tournament
+                        // administrator; ignored for the rest.
+                        trim((string) ($_POST['tournament_id'] ?? '')) !== ''
+                            ? (int) $_POST['tournament_id'] : null
                     );
                     break;
+
+                case 'set_tournament':
+                    $accounts->setStaffTournament(
+                        (int) ($_POST['user_id'] ?? 0),
+                        trim((string) ($_POST['tournament_id'] ?? '')) !== ''
+                            ? (int) $_POST['tournament_id'] : null
+                    );
+                    flash('success', 'Tournament saved.');
+                    header('Location: users.php');
+                    exit;
 
                 case 'reset_password':
                     $userId   = (int) ($_POST['user_id'] ?? 0);
@@ -97,19 +111,25 @@ $editing = isset($_GET['edit']) ? $accounts->findUser((int) $_GET['edit']) : nul
 $people = Database::all(
     'SELECT u.id, u.username, u.name, u.email, u.phone, u.address, u.photo_path,
             u.player_type, u.role, u.status, u.must_change_password, u.created_at,
-            t.name AS team_name
+            u.tournament_id,
+            t.name AS team_name,
+            CONCAT(tr.name, \' \', tr.season_year) AS tournament_name
        FROM users u
   LEFT JOIN teams t ON t.id = u.team_id
+  LEFT JOIN tournaments tr ON tr.id = u.tournament_id
       WHERE (:all = 1 OR u.status = :status)
    ORDER BY FIELD(u.status, \'pending\', \'approved\', \'rejected\', \'suspended\'), u.name',
     [':all' => $filter === 'all' ? 1 : 0, ':status' => $filter]
 );
+
+$allTournaments = (new \App\Services\TournamentService())->listTournaments();
 
 $links = [
     ['href' => 'index.php',        'label' => 'Overview'],
     ['href' => 'users.php',        'label' => 'People', 'current' => true],
     ['href' => 'tournaments.php',  'label' => 'Tournaments'],
     ['href' => 'applications.php', 'label' => 'Applications'],
+    ['href' => 'players.php',      'label' => 'Players'],
     ['href' => 'teams.php',        'label' => 'Teams'],
     ['href' => 'auction.php',      'label' => 'Auction'],
 ];
@@ -200,6 +220,20 @@ page_message($error);
                                 <?= e((string) $person['team_name']) ?>
                             </span>
                         <?php endif; ?>
+                        <?php /* A scorer or tournament administrator without a
+                                 tournament can do nothing at all, so say so
+                                 loudly rather than leaving a quiet blank. */ ?>
+                        <?php if (in_array($person['role'], \App\Services\AccountService::TOURNAMENT_SCOPED_ROLES, true)): ?>
+                            <?php if (!empty($person['tournament_name'])): ?>
+                                <span class="rounded bg-violet-500/10 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-violet-300">
+                                    <?= e((string) $person['tournament_name']) ?>
+                                </span>
+                            <?php else: ?>
+                                <span class="rounded bg-amber-400/15 px-2 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-300">
+                                    no tournament yet
+                                </span>
+                            <?php endif; ?>
+                        <?php endif; ?>
                         <span class="rounded px-2 py-1 text-[10px] font-bold uppercase tracking-wide <?=
                             match ($person['status']) {
                                 'approved' => 'bg-emerald-500/15 text-emerald-300',
@@ -244,6 +278,30 @@ page_message($error);
                             Reset password
                         </button>
                     </form>
+
+                    <?php /* Moving a scorer or tournament administrator to a
+                             different tournament, without leaving the list. */ ?>
+                    <?php if (in_array($person['role'], \App\Services\AccountService::TOURNAMENT_SCOPED_ROLES, true)): ?>
+                        <form method="post" class="inline-flex items-center gap-1.5">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="action" value="set_tournament">
+                            <input type="hidden" name="user_id" value="<?= (int) $person['id'] ?>">
+                            <label class="sr-only" for="tour_<?= (int) $person['id'] ?>">Tournament</label>
+                            <select id="tour_<?= (int) $person['id'] ?>" name="tournament_id"
+                                    class="rounded-lg border border-white/10 bg-slate-950/60 px-2 py-1.5 text-[12px] text-slate-200 outline-none focus:border-emerald-400/50">
+                                <option value="">Not assigned</option>
+                                <?php foreach ($allTournaments as $row): ?>
+                                    <option value="<?= (int) $row['id'] ?>"
+                                        <?= (int) $row['id'] === (int) ($person['tournament_id'] ?? 0) ? 'selected' : '' ?>>
+                                        <?= e((string) $row['name']) ?> <?= e((string) $row['season_year']) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="rounded-lg border border-white/10 px-2.5 py-1.5 text-[12px] font-bold text-slate-300 hover:bg-white/5">
+                                Set
+                            </button>
+                        </form>
+                    <?php endif; ?>
 
                     <?php if ((int) $person['must_change_password'] === 1): ?>
                         <span class="text-[11px] font-semibold text-amber-300/80">must change password at next sign-in</span>
@@ -304,9 +362,18 @@ page_message($error);
 <section class="mt-10">
     <h2 class="text-[13px] font-bold uppercase tracking-wider text-slate-400">Create a scorer or administrator</h2>
     <p class="mt-2 max-w-2xl text-[13px] leading-relaxed text-slate-500">
-        Scorers do not register themselves — you create the account and hand over the credentials.
-        Leave the password blank and one is generated for you; either way the account has to change
-        it at first sign-in.
+        Scorers and tournament administrators do not register themselves — you create the account and
+        hand over the credentials. Leave the password blank and one is generated for you; either way
+        the account has to change it at first sign-in.
+    </p>
+    <p class="mt-2 max-w-2xl text-[13px] leading-relaxed text-slate-500">
+        A <strong class="text-slate-300">scorer</strong> and a
+        <strong class="text-slate-300">tournament administrator</strong> each belong to one tournament,
+        so choose it below — a tournament may have as many of either as it needs. A tournament
+        administrator approves the applications for their tournament, runs its teams and works its
+        auction sheet; <strong class="text-slate-300">approving a player's account stays with an
+        administrator</strong>. Leave the tournament blank for a viewer or an administrator, who are
+        not tied to one.
     </p>
 
     <form method="post" class="mt-4 grid gap-5 rounded-2xl border border-white/10 bg-white/[0.03] p-6 sm:grid-cols-2">
@@ -317,7 +384,23 @@ page_message($error);
         field('name', 'Full name');
         field('username', 'Username', '', 'text', true, 'What they sign in with.');
         field('email', 'Email address', '', 'email');
-        select_field('role', 'Role', ['scorer' => 'Scorer', 'viewer' => 'Viewer', 'admin' => 'Administrator'], 'scorer');
+        select_field('role', 'Role', [
+            'scorer'           => 'Scorer',
+            'tournament_admin' => 'Tournament administrator',
+            'viewer'           => 'Viewer',
+            'admin'            => 'Administrator',
+        ], 'scorer');
+
+        $tournamentChoices = ['' => 'Not tied to a tournament'];
+
+        foreach ($allTournaments as $row) {
+            $tournamentChoices[(string) $row['id']] = $row['name'] . ' ' . $row['season_year'];
+        }
+
+        // Not marked required in HTML: an administrator or viewer leaves it
+        // blank on purpose. The service refuses a scorer without one.
+        select_field('tournament_id', 'Tournament', $tournamentChoices, '', false);
+
         field('password', 'Password', '', 'text', false, 'Leave blank to generate one.');
         ?>
 

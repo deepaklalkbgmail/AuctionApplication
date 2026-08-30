@@ -283,8 +283,52 @@ rejects('an administrator cannot move an email onto a taken one', AccountExcepti
 // =====================================================================
 section('Staff accounts and passwords');
 
-$scorer = $accounts->createStaffAccount('Divya Menon', 'divya.scorer', 'divya@club.test', 'scorer');
+// A scorer belongs to a tournament, so one has to exist before there is a
+// scorer to make. This is the same tournament the later sections use.
+$staffCup = $tournaments->create([
+    'name' => 'Staff Trophy', 'season_year' => 2027,
+    'auction_date'              => date('Y-m-d', strtotime('+5 days')),
+    'start_date'                => date('Y-m-d', strtotime('+20 days')),
+    'end_date'                  => date('Y-m-d', strtotime('+60 days')),
+    'team_name_change_deadline' => date('Y-m-d', strtotime('+15 days')),
+]);
+$staffCupId = (int) $staffCup['id'];
+
+rejects('a scorer must be given a tournament', AccountException::VALIDATION,
+    fn () => $accounts->createStaffAccount('No Cup', 'nocup.scorer', 'nocup@club.test', 'scorer'));
+
+rejects('and so must a tournament administrator', AccountException::VALIDATION,
+    fn () => $accounts->createStaffAccount('No Cup', 'nocup.tadmin', 'nocup2@club.test', 'tournament_admin'));
+
+$scorer = $accounts->createStaffAccount(
+    'Divya Menon', 'divya.scorer', 'divya@club.test', 'scorer', null, $staffCupId
+);
 is('a scorer account is created',        $scorer['user_id'] > 0, true);
+is('and belongs to that tournament',     (int) userRow($scorer['user_id'])['tournament_id'], $staffCupId);
+
+$tadmin = $accounts->createStaffAccount(
+    'Rohit Kammath', 'rohit.tadmin', 'rohit@club.test', 'tournament_admin', null, $staffCupId
+);
+is('a tournament administrator is created',
+    userRow($tadmin['user_id'])['role'], 'tournament_admin');
+is('scoped to their tournament',
+    (int) userRow($tadmin['user_id'])['tournament_id'], $staffCupId);
+
+$freeViewer = $accounts->createStaffAccount('Anu Pillai', 'anu.view', 'anu@club.test', 'viewer', null, $staffCupId);
+is('a role that is not scoped keeps no tournament',
+    userRow($freeViewer['user_id'])['tournament_id'], null);
+
+// Two scorers may share one tournament — the column is indexed, not unique.
+$second = $accounts->createStaffAccount(
+    'Sneha Kurup', 'sneha.scorer', 'sneha@club.test', 'scorer', null, $staffCupId
+);
+is('a second scorer may share the tournament',
+    (int) userRow($second['user_id'])['tournament_id'], $staffCupId);
+
+$accounts->setStaffTournament($second['user_id'], null);
+is('and can be unassigned again', userRow($second['user_id'])['tournament_id'], null);
+$accounts->setStaffTournament($second['user_id'], $staffCupId);
+
 is('with a password to hand over',       strlen($scorer['password']) >= 8, true);
 is('the account is approved at once',    userRow($scorer['user_id'])['status'], 'approved');
 is('but must change its password',       (int) userRow($scorer['user_id'])['must_change_password'], 1);

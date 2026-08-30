@@ -674,17 +674,30 @@ final class TournamentService
     }
 
     /**
-     * Rename a team.
+     * Edit a team: its name, short name, colour, home ground and — for an
+     * administrator — its purse.
      *
      * An owner may do this until the end of the tournament's
-     * team_name_change_deadline. An administrator is not bound by it —
-     * that is the point of having an administrator.
+     * team_name_change_deadline. Staff are not bound by it — that is the
+     * point of having staff.
+     *
+     * Two flags, not one, because the two questions are genuinely
+     * different. $actorIsAdmin asks "may you edit a team you do not own",
+     * which a tournament administrator may; $canSetPurse asks "may you
+     * move the money", which only a full administrator may. Folding them
+     * together is how a tournament administrator ends up able to post a
+     * field their form never showed them.
      *
      * @param array<string,mixed> $in
      * @return array<string,mixed>
      */
-    public function renameTeam(int $teamId, int $actorUserId, array $in, bool $actorIsAdmin = false): array
-    {
+    public function renameTeam(
+        int $teamId,
+        int $actorUserId,
+        array $in,
+        bool $actorIsAdmin = false,
+        bool $canSetPurse = false
+    ): array {
         $team = Database::one(
             'SELECT t.id, t.tournament_id, t.name, t.short_name,
                     tr.name AS tournament_name, tr.team_name_change_deadline
@@ -757,6 +770,27 @@ final class TournamentService
             $set[]            = 'home_venue = :venue';
             $params[':venue'] = trim((string) $in['home_venue']) !== ''
                 ? mb_substr(trim((string) $in['home_venue']), 0, 120) : null;
+        }
+
+        // The purse is an administrator's to correct — an owner never sees
+        // this field. It cannot drop below what the team has already spent:
+        // chk_team_spent would refuse it, and an error number is a poor way
+        // to learn that you have to sell somebody first.
+        if ($canSetPurse && array_key_exists('purse_total', $in) && trim((string) $in['purse_total']) !== '') {
+            $purse = $this->money($in['purse_total'], 'Purse per team');
+            $spent = (float) Database::scalar('SELECT purse_spent FROM teams WHERE id = :id', [':id' => $teamId]);
+
+            if ((float) $purse < $spent) {
+                throw new AccountException(
+                    AccountException::VALIDATION,
+                    'That purse is smaller than the ' . $this->rupees($spent)
+                        . ' this team has already spent at the auction.',
+                    ['purse_spent' => $spent]
+                );
+            }
+
+            $set[]            = 'purse_total = :purse';
+            $params[':purse'] = $purse;
         }
 
         if ($set !== []) {
@@ -929,16 +963,32 @@ final class TournamentService
     }
 
     /** @return array<int,array<string,mixed>> */
-    public function listTournaments(): array
+    public function listTournaments(?int $onlyId = null): array
     {
+        // A tournament administrator passes their own id and sees a list of
+        // one. Doing the narrowing here rather than in each screen means a
+        // screen cannot forget: the switcher, the default selection and the
+        // counts all come from the same list.
+        $where  = $onlyId === null ? '' : ' WHERE t.id = :only';
+        $params = $onlyId === null ? [] : [':only' => $onlyId];
+
         return Database::all(
             'SELECT t.*,
                     (SELECT COUNT(*) FROM teams   WHERE tournament_id = t.id) AS team_count,
                     (SELECT COUNT(*) FROM players WHERE tournament_id = t.id) AS player_count,
                     (SELECT COUNT(*) FROM tournament_registrations
                       WHERE tournament_id = t.id AND status = \'pending\')    AS pending_count
-               FROM tournaments t
-           ORDER BY t.season_year DESC, t.name'
+               FROM tournaments t' . $where . '
+           ORDER BY t.season_year DESC, t.name',
+            $params
+        );
+    }
+
+    /** The list the signed-in person is allowed to see. */
+    public function listTournamentsForCurrentUser(): array
+    {
+        return $this->listTournaments(
+            \App\Core\Auth::is(\App\Core\Auth::ROLE_ADMIN) ? null : \App\Core\Auth::tournamentId()
         );
     }
 
@@ -998,6 +1048,228 @@ final class TournamentService
            ORDER BY t.name',
             [':t' => $tournamentId]
         );
+    }
+
+    // -----------------------------------------------------------------
+    //  Players in the auction pool — correcting what approval set
+    // -----------------------------------------------------------------
+
+    /**
+     * Everyone approved into a tournament, with the state of their lot.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    public function poolPlayers(int $tournamentId): array
+    {
+        return Database::all(
+            'SELECT p.*,
+                    l.id     AS lot_id,
+                    l.status AS lot_status,
+                    l.lot_order,
+                    l.current_bid,
+                    t.name   AS team_name
+               FROM players p
+          LEFT JOIN auction_lots l ON l.player_id = p.id
+          LEFT JOIN teams        t ON t.id        = p.team_id
+              WHERE p.tournament_id = :t
+           ORDER BY p.auction_set IS NULL, p.auction_set, p.full_name',
+            [':t' => $tournamentId]
+        );
+    }
+
+    /** One pool player, or null. */
+    public function poolPlayer(int $playerId): ?array
+    {
+        return Database::one(
+            'SELECT p.*, l.id AS lot_id, l.status AS lot_status, l.current_bid
+               FROM players p
+          LEFT JOIN auction_lots l ON l.player_id = p.id
+              WHERE p.id = :p',
+            [':p' => $playerId]
+        );
+    }
+
+    /**
+     * Correct a player who is already in the auction pool.
+     *
+     * This is the screen version of the hand-written UPDATE an organiser
+     * would otherwise run in phpMyAdmin, and it exists because that UPDATE
+     * has two traps in it. The base price lives in two tables — players and
+     * auction_lots — and changing one without the other leaves the sheet
+     * disagreeing with the card. And two CHECK constraints will refuse the
+     * change outright once a lot is in flight:
+     *
+     *   chk_player_sold      a sold player's price must be >= their base
+     *   chk_lot_bid_floor    a standing bid must be >= the lot's base
+     *
+     * So the money is only editable while the lot is still queued. Refusing
+     * it in a sentence beats an error number, and beats a half-applied
+     * edit. Everything that does not touch the money — the name, the
+     * styles, the set, the career figures — stays editable throughout,
+     * because a typo in somebody's name should not need an auction to be
+     * over.
+     *
+     * @param array<string,mixed> $in
+     * @return array<string,mixed>
+     */
+    public function updatePlayer(int $playerId, array $in): array
+    {
+        return Database::transaction(function () use ($playerId, $in): array {
+            $player = Database::one(
+                'SELECT p.*, l.id AS lot_id, l.status AS lot_status, l.current_bid
+                   FROM players p
+              LEFT JOIN auction_lots l ON l.player_id = p.id
+                  WHERE p.id = :p
+                    FOR UPDATE',
+                [':p' => $playerId]
+            );
+
+            if ($player === null) {
+                throw new AccountException(AccountException::NOT_FOUND, 'No such player.', [], 404);
+            }
+
+            // A lot that has been called is settled money. 'queued' is the
+            // only state where the base price is still a number nobody has
+            // acted on.
+            $moneyLocked = $player['lot_status'] !== null && $player['lot_status'] !== 'queued';
+            $moneyLocked = $moneyLocked || in_array($player['status'], ['sold', 'in_auction'], true);
+
+            $set    = [];
+            $params = [':id' => $playerId];
+
+            if (array_key_exists('full_name', $in)) {
+                $set[]           = 'full_name = :name';
+                $params[':name'] = $this->text($in['full_name'], 'Name', 2, 120);
+            }
+
+            if (array_key_exists('display_name', $in)) {
+                $short = trim((string) $in['display_name']);
+                $set[]            = 'display_name = :display';
+                $params[':display'] = $short !== '' ? mb_substr($short, 0, 60) : null;
+            }
+
+            if (array_key_exists('country', $in) && trim((string) $in['country']) !== '') {
+                $set[]              = 'country = :country';
+                $params[':country'] = $this->text($in['country'], 'Country', 2, 60);
+            }
+
+            if (array_key_exists('role', $in)) {
+                $set[]           = 'role = :role';
+                $params[':role'] = $this->playerRole($in['role']);
+            }
+
+            if (array_key_exists('batting_style', $in)) {
+                $style = (string) $in['batting_style'];
+                $set[]              = 'batting_style = :batting';
+                $params[':batting'] = in_array($style, ['right_hand', 'left_hand'], true) ? $style : null;
+            }
+
+            if (array_key_exists('bowling_style', $in)) {
+                $set[]              = 'bowling_style = :bowling';
+                $params[':bowling'] = $this->bowlingStyle($in['bowling_style']);
+            }
+
+            if (array_key_exists('auction_set', $in)) {
+                $auctionSet = trim((string) $in['auction_set']);
+                $set[]          = 'auction_set = :set';
+                $params[':set'] = $auctionSet !== '' ? mb_substr($auctionSet, 0, 40) : null;
+            }
+
+            if (array_key_exists('is_capped', $in)) {
+                $set[]              = 'is_capped = :capped';
+                $params[':capped']  = !empty($in['is_capped']) ? 1 : 0;
+            }
+
+            // Overseas counts against a team's overseas quota, and teams
+            // carry that as a running total. Flipping it under a player who
+            // has already been bought would leave the total wrong, and
+            // nothing recomputes it.
+            if (array_key_exists('is_overseas', $in)) {
+                $wanted = !empty($in['is_overseas']) ? 1 : 0;
+
+                if ($wanted !== (int) $player['is_overseas'] && $moneyLocked) {
+                    throw new AccountException(
+                        AccountException::VALIDATION,
+                        'Overseas cannot change once ' . $player['full_name']
+                            . ' has been called at the auction — their team\'s overseas count is already set.'
+                    );
+                }
+
+                $set[]               = 'is_overseas = :overseas';
+                $params[':overseas'] = $wanted;
+            }
+
+            foreach ([
+                'career_matches' => ['career_matches', 0, 2000],
+                'career_runs'    => ['career_runs',    0, 100000],
+                'career_wickets' => ['career_wickets', 0, 5000],
+            ] as $key => [$column, $min, $max]) {
+                if (array_key_exists($key, $in) && trim((string) $in[$key]) !== '') {
+                    $set[]                 = "{$column} = :{$column}";
+                    $params[":{$column}"]  = $this->count($in[$key], ucfirst(str_replace('_', ' ', $key)), $min, $max);
+                }
+            }
+
+            foreach (['strike_rate' => 400.0, 'economy' => 36.0] as $key => $ceiling) {
+                if (array_key_exists($key, $in) && trim((string) $in[$key]) !== '') {
+                    $value = str_replace(',', '', trim((string) $in[$key]));
+
+                    if (!is_numeric($value) || (float) $value < 0 || (float) $value > $ceiling) {
+                        throw new AccountException(
+                            AccountException::VALIDATION,
+                            ucfirst(str_replace('_', ' ', $key)) . ' must be between 0 and ' . $ceiling . '.'
+                        );
+                    }
+
+                    $set[]           = "{$key} = :{$key}";
+                    $params[":{$key}"] = number_format((float) $value, 2, '.', '');
+                }
+            }
+
+            $newBase = null;
+
+            if (array_key_exists('base_price', $in) && trim((string) $in['base_price']) !== '') {
+                $newBase = $this->money($in['base_price'], 'Base price');
+
+                if ((float) $newBase !== (float) $player['base_price']) {
+                    if ($moneyLocked) {
+                        throw new AccountException(
+                            AccountException::VALIDATION,
+                            'The base price is fixed once a lot has been called. '
+                                . $player['full_name'] . ' is '
+                                . ($player['status'] === 'sold' ? 'already sold' : 'in the auction right now') . '.'
+                        );
+                    }
+
+                    $set[]           = 'base_price = :base';
+                    $params[':base'] = $newBase;
+                } else {
+                    $newBase = null;
+                }
+            }
+
+            if ($set !== []) {
+                Database::exec('UPDATE players SET ' . implode(', ', $set) . ' WHERE id = :id', $params);
+            }
+
+            // The lot carries its own copy of the base price — that is what
+            // the auction sheet bids from. Keep the two in step, or the
+            // change is cosmetic.
+            if ($newBase !== null && $player['lot_id'] !== null) {
+                Database::exec(
+                    "UPDATE auction_lots SET base_price = :base WHERE id = :lot AND status = 'queued'",
+                    [':base' => $newBase, ':lot' => (int) $player['lot_id']]
+                );
+            }
+
+            return [
+                'ok'          => true,
+                'player_id'   => $playerId,
+                'name'        => $player['full_name'],
+                'base_price'  => $newBase !== null,
+                'money_locked' => $moneyLocked,
+            ];
+        });
     }
 
     /** Can this team still be renamed by its owner today? */
@@ -1183,6 +1455,26 @@ final class TournamentService
         return number_format((float) $value, 2, '.', '');
     }
 
+    /**
+     * ₹12,34,567 — Indian grouping, for a message a person reads.
+     *
+     * A copy of the view helper of the same name rather than a call to it:
+     * a service that require()s the layout to phrase an error is a service
+     * that cannot be used from the command line, and the tests are.
+     */
+    private function rupees(float $amount): string
+    {
+        $s     = (string) (int) round(abs($amount));
+        $last3 = substr($s, -3);
+        $rest  = substr($s, 0, -3);
+
+        if ($rest !== '') {
+            $last3 = preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', $rest) . ',' . $last3;
+        }
+
+        return '₹' . $last3;
+    }
+
     private function count(mixed $value, string $label, int $min, int $max, ?int $default = null): int
     {
         if ($default !== null && (is_string($value) ? trim($value) === '' : $value === null)) {
@@ -1212,6 +1504,30 @@ final class TournamentService
         return array_key_exists($value, AccountService::PLAYER_KINDS)
             ? $value
             : 'batsman';
+    }
+
+    /**
+     * The bowling styles the column will take. Anything else becomes
+     * 'none', which is the column's own default and reads as "does not
+     * bowl" rather than as a failure.
+     */
+    public const BOWLING_STYLES = [
+        'none'               => 'Does not bowl',
+        'right_arm_fast'     => 'Right-arm fast',
+        'right_arm_medium'   => 'Right-arm medium',
+        'right_arm_offbreak' => 'Right-arm off-break',
+        'right_arm_legbreak' => 'Right-arm leg-break',
+        'left_arm_fast'      => 'Left-arm fast',
+        'left_arm_medium'    => 'Left-arm medium',
+        'left_arm_orthodox'  => 'Left-arm orthodox',
+        'left_arm_chinaman'  => 'Left-arm chinaman',
+    ];
+
+    private function bowlingStyle(mixed $value): string
+    {
+        $value = trim((string) $value);
+
+        return array_key_exists($value, self::BOWLING_STYLES) ? $value : 'none';
     }
 
     /**

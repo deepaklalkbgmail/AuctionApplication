@@ -25,13 +25,16 @@ use App\Core\Security;
 use App\Exceptions\AccountException;
 use App\Services\TournamentService;
 
-Auth::require(Auth::ROLE_ADMIN);
+// A tournament administrator gets this screen for their own tournament:
+// approving applications is the tournament administrator's core job. The scope is enforced twice — the
+// list they are offered is narrowed, and the id they end up on is checked.
+Auth::require(Auth::ROLE_ADMIN, Auth::ROLE_TADMIN);
 
 $tournaments = new TournamentService();
 $adminId     = (int) Auth::id();
 $error       = null;
 
-$all = $tournaments->listTournaments();
+$all = $tournaments->listTournamentsForCurrentUser();
 
 if ($all === []) {
     page_head('Applications', '../', [
@@ -53,6 +56,14 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $error = 'Your session expired. Please try again.';
     } else {
         $approve = ($_POST['action'] ?? '') === 'approve';
+
+        // Which tournament this application actually belongs to — read from
+        // the row, never from the form. The posted tournament_id is only a
+        // hint for the redirect, and a hint is not a permission.
+        Auth::requireWorksOn((int) Database::scalar(
+            'SELECT tournament_id FROM tournament_registrations WHERE id = :r',
+            [':r' => (int) ($_POST['registration_id'] ?? 0)]
+        ) ?: null);
 
         try {
             $result = $tournaments->decideApplication(
@@ -81,6 +92,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $tournamentId = isset($_GET['tournament']) ? (int) $_GET['tournament'] : (int) $all[0]['id'];
+Auth::requireWorksOn($tournamentId);
 $status       = (string) ($_GET['status'] ?? 'pending');
 $tournament   = $tournaments->find($tournamentId);
 $queue        = $tournaments->applications($tournamentId, $status);
@@ -90,6 +102,7 @@ $links = [
     ['href' => 'users.php',        'label' => 'People'],
     ['href' => 'tournaments.php',  'label' => 'Tournaments'],
     ['href' => 'applications.php', 'label' => 'Applications', 'current' => true],
+    ['href' => 'players.php',      'label' => 'Players'],
     ['href' => 'teams.php',        'label' => 'Teams'],
     ['href' => 'auction.php',      'label' => 'Auction'],
 ];

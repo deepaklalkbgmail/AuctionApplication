@@ -185,11 +185,17 @@ CREATE TABLE `users` (
    soon as the person chooses their own.
 */
     `must_change_password` TINYINT(1) NOT NULL DEFAULT 0,
-    `role`           ENUM('admin','team_owner','scorer','viewer','player') NOT NULL DEFAULT 'viewer',
+    `role`           ENUM('admin','tournament_admin','team_owner','scorer','viewer','player') NOT NULL DEFAULT 'viewer',
     `status`         ENUM('pending','approved','rejected','suspended') NOT NULL DEFAULT 'approved',
     `approved_by`    INT UNSIGNED     NULL,
     `approved_at`    DATETIME         NULL,
     `team_id`        INT UNSIGNED     NULL,  /* required for team_owner, NULL otherwise */
+/*
+   Which tournament a scorer or a tournament administrator works on.
+   NULL for everybody else. Not unique: a tournament may have as many
+   scorers as it needs.
+*/
+    `tournament_id`  INT UNSIGNED     NULL,
     `avatar_url`     VARCHAR(255)     NULL,
     `is_active`      TINYINT(1)   NOT NULL DEFAULT 1,
     `last_login_at`  DATETIME         NULL,
@@ -207,9 +213,17 @@ CREATE TABLE `users` (
     UNIQUE KEY `uq_users_owner_team` (`team_id`),
     KEY `idx_users_role` (`role`, `is_active`),
     KEY `idx_users_status` (`status`, `role`),
+    KEY `idx_users_tournament` (`tournament_id`, `role`),
 
     CONSTRAINT `fk_users_team`
         FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
+/*
+   Deleting a tournament must not be blocked by its staff, and must not
+   delete their accounts either: they simply become unassigned.
+*/
+    CONSTRAINT `fk_users_tournament`
+        FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
+        ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_users_approved_by`
         FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
 

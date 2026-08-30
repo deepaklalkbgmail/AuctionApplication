@@ -136,6 +136,7 @@ $links = [
     ['href' => 'users.php',        'label' => 'People'],
     ['href' => 'tournaments.php',  'label' => 'Tournaments', 'current' => true],
     ['href' => 'applications.php', 'label' => 'Applications'],
+    ['href' => 'players.php',      'label' => 'Players'],
     ['href' => 'teams.php',        'label' => 'Teams'],
     ['href' => 'auction.php',      'label' => 'Auction'],
 ];

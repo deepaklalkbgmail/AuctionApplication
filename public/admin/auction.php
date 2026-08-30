@@ -32,7 +32,10 @@ use App\Services\AccountService;
 use App\Services\AuctionService;
 use App\Services\TournamentService;
 
-Auth::require(Auth::ROLE_ADMIN);
+// A tournament administrator gets this screen for their own tournament:
+// the auction sheet is one tournament's. The scope is enforced twice — the
+// list they are offered is narrowed, and the id they end up on is checked.
+Auth::require(Auth::ROLE_ADMIN, Auth::ROLE_TADMIN);
 
 $auction     = new AuctionService();
 $tournaments = new TournamentService();
@@ -40,7 +43,7 @@ $adminId     = (int) Auth::id();
 $error       = null;
 $warning     = null;
 
-$all = $tournaments->listTournaments();
+$all = $tournaments->listTournamentsForCurrentUser();
 
 /**
  * How the pool is ordered. Marquee first is the one that matters: the big
@@ -64,6 +67,7 @@ $links = [
     ['href' => 'users.php',        'label' => 'People'],
     ['href' => 'tournaments.php',  'label' => 'Tournaments'],
     ['href' => 'applications.php', 'label' => 'Applications'],
+    ['href' => 'players.php',      'label' => 'Players'],
     ['href' => 'teams.php',        'label' => 'Teams'],
     ['href' => 'auction.php',      'label' => 'Auction', 'current' => true],
 ];
@@ -89,6 +93,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     if (!Security::verifyCsrf($_POST['csrf_token'] ?? null)) {
         $error = 'Your session expired. Please try again.';
     } else {
+        // Every action here names a lot. Take the tournament from the lot
+        // itself: the posted tournament_id only steers the redirect, and a
+        // tournament administrator must not be able to sell out of somebody
+        // else's auction by editing a hidden field.
+        Auth::requireWorksOn((int) Database::scalar(
+            'SELECT tournament_id FROM auction_lots WHERE id = :l',
+            [':l' => (int) ($_POST['lot_id'] ?? 0)]
+        ) ?: null);
+
         try {
             switch ((string) ($_POST['action'] ?? '')) {
                 case 'sell':
@@ -165,6 +178,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $tournamentId = isset($_GET['tournament']) ? (int) $_GET['tournament'] : (int) $all[0]['id'];
+Auth::requireWorksOn($tournamentId);
 $tournament   = $tournaments->find($tournamentId);
 $search       = trim((string) ($_GET['q'] ?? ''));
 

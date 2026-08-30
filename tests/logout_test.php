@@ -141,9 +141,20 @@ function seed(): void
         [':h' => password_hash(TEST_PASSWORD, PASSWORD_BCRYPT, ['cost' => 12]), ':id' => $adminId]
     );
 
-    foreach ([['Test Scorer', 'test.scorer', 'scorer@t.test', 'scorer'],
-              ['Test Viewer', 'test.viewer', 'viewer@t.test', 'viewer']] as [$name, $user, $mail, $role]) {
-        $made = $accounts->createStaffAccount($name, $user, $mail, $role, TEST_PASSWORD);
+    // The tournament comes first now: a scorer belongs to one, so there has
+    // to be one to give them.
+    $tournament = $tournaments->create([
+        'name' => 'Logout Test Cup', 'season_year' => (int) date('Y'),
+        'auction_date'              => date('Y-m-d', strtotime('+5 days')),
+        'start_date'                => date('Y-m-d', strtotime('+20 days')),
+        'end_date'                  => date('Y-m-d', strtotime('+60 days')),
+        'team_name_change_deadline' => date('Y-m-d', strtotime('+15 days')),
+    ]);
+
+    foreach ([['Test Scorer', 'test.scorer', 'scorer@t.test', 'scorer', (int) $tournament['id']],
+              ['Test Admin2', 'test.tadmin', 'tadmin@t.test', 'tournament_admin', (int) $tournament['id']],
+              ['Test Viewer', 'test.viewer', 'viewer@t.test', 'viewer', null]] as [$name, $user, $mail, $role, $tid]) {
+        $made = $accounts->createStaffAccount($name, $user, $mail, $role, TEST_PASSWORD, $tid);
         Database::exec('UPDATE users SET must_change_password = 0 WHERE id = :id', [':id' => $made['user_id']]);
     }
 
@@ -160,14 +171,6 @@ function seed(): void
         'password' => TEST_PASSWORD, 'password_confirm' => TEST_PASSWORD,
     ]);
     $accounts->decideRegistration($owner, true, $adminId);
-
-    $tournament = $tournaments->create([
-        'name' => 'Logout Test Cup', 'season_year' => (int) date('Y'),
-        'auction_date'              => date('Y-m-d', strtotime('+5 days')),
-        'start_date'                => date('Y-m-d', strtotime('+20 days')),
-        'end_date'                  => date('Y-m-d', strtotime('+60 days')),
-        'team_name_change_deadline' => date('Y-m-d', strtotime('+15 days')),
-    ]);
 
     $tournaments->createTeam($owner, (int) $tournament['id'], ['name' => 'Test Titans', 'short_name' => 'TT']);
 }
