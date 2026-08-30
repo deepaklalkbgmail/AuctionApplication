@@ -65,8 +65,10 @@
 
    Click your database in the LEFT SIDEBAR first, then open the SQL tab.
    ===================================================================== */
+SET @db := DATABASE();
+
 SET @guard := IF(
-    DATABASE() IS NULL,
+    @db IS NULL,
     'SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - no database is selected. Click your database in the LEFT SIDEBAR, then open the SQL tab and run this file again. Nothing has been changed.''',
     'DO 0'
 );
@@ -117,24 +119,34 @@ SELECT 'system', 'system', 'log.enabled', 'system', 'Activity log',
 
 
 /* ---------------------------------------------------------------------
-   3. Check. Both should read OK, and nothing else in your database
-      should have moved.
+   3. Check.
+
+   Two statements, and the order matters. The one that reads your own
+   tables runs FIRST, while the current database is still yours; the one
+   that reads information_schema runs LAST, so nothing follows it that
+   could be caught out by phpMyAdmin switching the panel to
+   "Table: TABLES" afterwards. That is the trap that produced
+
+       #1109 - Unknown table 'users' in information_schema
+
+   in an earlier migration.
    --------------------------------------------------------------------- */
-SELECT 'activity_log exists' AS `check`,
-       IF(COUNT(*) = 1, 'OK', 'MISSING') AS `result`
-  FROM information_schema.TABLES
- WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'activity_log'
-UNION ALL
-SELECT 'it has its indexes',
-       IF(COUNT(DISTINCT INDEX_NAME) >= 5, 'OK', 'INCOMPLETE')
-  FROM information_schema.STATISTICS
- WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'activity_log'
-UNION ALL
-SELECT 'lines recorded so far',
-       CAST(COUNT(*) AS CHAR) FROM `activity_log`
+SELECT 'lines recorded so far' AS `check`,
+       CAST(COUNT(*) AS CHAR) AS `result` FROM `activity_log`
 UNION ALL
 SELECT 'your players (unchanged by this file)',
        CAST(COUNT(*) AS CHAR) FROM `players`
 UNION ALL
 SELECT 'your sold lots (unchanged by this file)',
        CAST(COUNT(*) AS CHAR) FROM `auction_lots` WHERE `status` = 'sold';
+
+
+SELECT 'activity_log exists' AS `check`,
+       IF(COUNT(*) = 1, 'OK', 'MISSING') AS `result`
+  FROM information_schema.TABLES
+ WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'activity_log'
+UNION ALL
+SELECT 'it has its indexes',
+       IF(COUNT(DISTINCT INDEX_NAME) >= 5, 'OK', 'INCOMPLETE')
+  FROM information_schema.STATISTICS
+ WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'activity_log';

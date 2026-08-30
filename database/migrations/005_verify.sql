@@ -73,3 +73,59 @@ SELECT 'activity_log table (migration 006)',
        IF(COUNT(*) = 1, 'yes', 'NO - run 006_activity_log.sql')
   FROM information_schema.TABLES
  WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'activity_log';
+
+/* ---------------------------------------------------------------------
+   Your data, so this file also serves as the before-and-after check.
+
+   Run it BEFORE the migration and again AFTER. Every number must be
+   identical: the migration adds a column, it does not add, remove or
+   reclassify a single row.
+
+   'reclassified as tournament_admin' is the ENUM check. MySQL stores an
+   ENUM as a position, and migration 005 inserts 'tournament_admin' at
+   position 2, moving every role after it along by one. MySQL converts
+   by text rather than by position, so nothing is reclassified - this
+   line proves it on your own data, and must read 0 until you actually
+   create a tournament administrator.
+
+   Fully qualified with @db, like everything above, so it does not
+   matter which database phpMyAdmin currently thinks is selected.
+   --------------------------------------------------------------------- */
+SET @counts := CONCAT(
+    'SELECT ''users'' AS item, CAST(COUNT(*) AS CHAR) AS n FROM `', @db, '`.`users` ',
+    'UNION ALL SELECT ''  of them admins'',  CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''admin'' ',
+    'UNION ALL SELECT ''  of them owners'',  CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''team_owner'' ',
+    'UNION ALL SELECT ''  of them scorers'', CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''scorer'' ',
+    'UNION ALL SELECT ''reclassified as tournament_admin'', CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`users` WHERE `role` = ''tournament_admin'' ',
+    'UNION ALL SELECT ''tournaments'',   CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`tournaments` ',
+    'UNION ALL SELECT ''teams'',         CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`teams` ',
+    'UNION ALL SELECT ''players'',       CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`players` ',
+    'UNION ALL SELECT ''  of them sold'', CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`players` WHERE `status` = ''sold'' ',
+    'UNION ALL SELECT ''auction lots'',   CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`auction_lots` ',
+    'UNION ALL SELECT ''auction bids'',   CAST(COUNT(*) AS CHAR) FROM `', @db, '`.`auction_bids` ',
+    'UNION ALL SELECT ''total sold for'', CONCAT(''INR '', IFNULL(FORMAT(SUM(`sold_price`), 0), ''0'')) FROM `', @db, '`.`players`'
+);
+PREPARE counts FROM @counts;
+EXECUTE counts;
+DEALLOCATE PREPARE counts;
+
+
+/* ---------------------------------------------------------------------
+   Who works on which tournament.
+
+   Anybody listed as NOT ASSIGNED cannot score or administer until you
+   give them a tournament under Administration -> People -> Set.
+   An empty result means you have no scorers or tournament
+   administrators yet.
+   --------------------------------------------------------------------- */
+SET @staff := CONCAT(
+    'SELECT u.`id`, u.`name`, u.`role`, ',
+           'IFNULL(t.`name`, ''*** NOT ASSIGNED ***'') AS `tournament` ',
+      'FROM `', @db, '`.`users` u ',
+      'LEFT JOIN `', @db, '`.`tournaments` t ON t.`id` = u.`tournament_id` ',
+     'WHERE u.`role` IN (''scorer'', ''tournament_admin'') ',
+     'ORDER BY u.`id`'
+);
+PREPARE staff FROM @staff;
+EXECUTE staff;
+DEALLOCATE PREPARE staff;
