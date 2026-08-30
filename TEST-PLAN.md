@@ -527,6 +527,28 @@ from a screen, and the auction sheet agrees with it.
 
 ---
 
+## Module 12c — The activity log
+
+**Goal:** every change is written down, with what it was before, and the
+log can never stop a change from being saved.
+
+Run **database/migrations/006_activity_log.sql** first.
+
+| # | Do this | Should happen | ✓ |
+|---|---------|---------------|---|
+| 12c.1 | **Administration → Activity** | A list, newest first. On a fresh database, one line saying logging was switched on | ☐ |
+| 12c.2 | Edit a player's base price on **Players**, then come back | A new line naming you, the player, and the price **before and after** | ☐ |
+| 12c.3 | Change a team's colour, then come back | A line showing the old colour and the new one | ☐ |
+| 12c.4 | Save a form **without changing anything** | No new line. A save that changes nothing is not a change | ☐ |
+| 12c.5 | Sell a player on the auction sheet | A gold line naming the buying team and the price | ☐ |
+| 12c.6 | Press **Undo** on that sale | A second line showing the price going back | ☐ |
+| 12c.7 | Approve somebody, and reset somebody's password | Both are listed. The reset says a password was issued and **does not show it** | ☐ |
+| 12c.8 | Look for anything on the page that edits or deletes a line | There is none. It is read-only on purpose | ☐ |
+| 12c.9 | Sign in as a **tournament administrator** and open Activity | Only their own tournament's lines | ☐ |
+| 12c.10 | On the server, open the `error_log` file in your cPanel account | The same changes appear there as `[activity]` lines | ☐ |
+
+---
+
 ## Module 13 — Security spot-checks
 
 Quick, and worth doing once.

@@ -380,6 +380,37 @@ The purse cannot be set below what the team has already spent at the auction.
 You would be asking the database for a team that has overspent, and it will
 not have it. Sell somebody first, or raise the figure instead.
 
+### 6.4b Who changed what — the activity log
+
+**Administration → Activity.**
+
+Every administrative change is recorded: approving somebody, editing a
+player, moving a base price or a purse, selling a lot, undoing a sale,
+handing a team to a new owner, cancelling a tournament. Each line names
+who did it, when, and — the useful part — **what each field was before it
+moved**.
+
+So "who dropped that base price, and what was it?" is a question you can
+answer from a screen instead of from last night's backup.
+
+Nothing on that page changes anything, and nothing in the application
+edits or deletes a line once it is written. A log you can edit is not
+evidence.
+
+The same lines also go to the server's PHP error log. On cPanel that is
+the `error_log` file in your account's root or in `public_html`. That
+copy exists so the trail survives the database being the thing that went
+wrong.
+
+> **It needs migration 006.** Until you run
+> `database/migrations/006_activity_log.sql` once, the page explains that
+> it is not switched on. Everything else keeps working meanwhile — a
+> missing log never stops a change from being saved.
+
+Two things are deliberately **not** written down: passwords, and the
+contents of a password reset. The log records *that* a password was
+issued, never what it was.
+
 ### 6.5 Creating scorers and tournament administrators
 
 **Administration → People → Create a scorer or administrator.**

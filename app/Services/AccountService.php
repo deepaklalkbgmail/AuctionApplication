@@ -157,6 +157,16 @@ final class AccountService
             [':status' => $approve ? 'approved' : 'rejected', ':admin' => $adminId, ':id' => $userId]
         );
 
+        ActivityLog::record(
+            $approve ? 'account.approve' : 'account.reject',
+            'account',
+            $userId,
+            (string) $user['name'],
+            ['status' => ['from' => $user['status'], 'to' => $approve ? 'approved' : 'rejected']],
+            null,
+            $user['email'] ?? null
+        );
+
         return ['ok' => true, 'user_id' => $userId, 'status' => $approve ? 'approved' : 'rejected'];
     }
 
@@ -238,6 +248,16 @@ final class AccountService
         }
 
         Database::exec("UPDATE users SET {$set} WHERE id = :id", $params);
+
+        $changes = ActivityLog::diff(
+            $user,
+            (array) Database::one('SELECT * FROM users WHERE id = :id', [':id' => $userId]),
+            ['name', 'email', 'phone', 'address', 'player_type', 'status', 'photo_path']
+        );
+
+        if ($changes !== []) {
+            ActivityLog::record('account.update', 'account', $userId, $name, $changes);
+        }
     }
 
     // -----------------------------------------------------------------
@@ -318,7 +338,23 @@ final class AccountService
              ':role' => $role, ':status' => 'approved', ':tournament' => $tournamentId]
         );
 
-        return ['user_id' => Database::lastInsertId(), 'username' => $username, 'password' => $password];
+        $newId = Database::lastInsertId();
+
+        // The password is deliberately NOT in the log. It is handed over
+        // once, in person or down a phone, and a log an organiser can read
+        // is a log an organiser could paste.
+        ActivityLog::record(
+            'account.create_staff',
+            'account',
+            $newId,
+            $name,
+            ['role' => ['from' => null, 'to' => $role],
+             'tournament_id' => ['from' => null, 'to' => $tournamentId]],
+            $tournamentId,
+            $username
+        );
+
+        return ['user_id' => $newId, 'username' => $username, 'password' => $password];
     }
 
     /**
@@ -350,6 +386,21 @@ final class AccountService
         Database::exec(
             'UPDATE users SET tournament_id = :t WHERE id = :id',
             [':t' => $tournamentId, ':id' => $userId]
+        );
+
+        // Worth a line of its own: this is what decides whether somebody can
+        // score or administer at all, and "why can the scorer not save?" is
+        // a question the log should be able to answer.
+        ActivityLog::record(
+            'account.set_tournament',
+            'account',
+            $userId,
+            (string) $user['name'],
+            ['tournament_id' => [
+                'from' => $user['tournament_id'] ?? null,
+                'to'   => $tournamentId,
+            ]],
+            $tournamentId
         );
     }
 
@@ -388,7 +439,7 @@ final class AccountService
      */
     public function adminResetPassword(int $userId, ?string $password = null): string
     {
-        $this->findUser($userId);
+        $user = $this->findUser($userId);
 
         $password ??= $this->readablePassword();
         $this->assertPasswordStrong($password);
@@ -396,6 +447,17 @@ final class AccountService
         Database::exec(
             'UPDATE users SET password_hash = :hash, must_change_password = 1 WHERE id = :id',
             [':hash' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), ':id' => $userId]
+        );
+
+        // That a reset happened, never what it was reset to.
+        ActivityLog::record(
+            'account.reset_password',
+            'account',
+            $userId,
+            (string) $user['name'],
+            [],
+            null,
+            'A new password was issued and must be changed at next sign-in.'
         );
 
         return $password;

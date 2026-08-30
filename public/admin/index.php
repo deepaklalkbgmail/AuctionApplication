@@ -66,6 +66,7 @@ $links[] = ['href' => 'applications.php', 'label' => 'Applications'];
 $links[] = ['href' => 'players.php',      'label' => 'Players'];
 $links[] = ['href' => 'teams.php',        'label' => 'Teams'];
 $links[] = ['href' => 'auction.php',      'label' => 'Auction'];
+$links[] = ['href' => 'activity.php',     'label' => 'Activity'];
 
 page_head('Administration', '../', $links);
 page_message();
@@ -171,6 +172,8 @@ page_message();
         'Create each team, name its one owner, and edit its name, colour, home ground' . ($isAdmin ? ' and purse.' : '.')];
     $tasks[] = ['auction.php', 'Run the auction',
         'The auctioneer\'s sheet. Call each lot in the room, then record the price it went for and the team that bought it.'];
+    $tasks[] = ['activity.php', 'Activity',
+        'Who changed what, and what it was before. Every administrative change, newest first — nothing on it can be edited or removed.'];
     $tasks[] = ['../score.php', 'Score a match',
         'The scorer\'s pad. Ball by ball, with an undo.'];
     ?>

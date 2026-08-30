@@ -110,7 +110,18 @@ final class TournamentService
             ]
         );
 
-        return $this->find(Database::lastInsertId());
+        $created = $this->find(Database::lastInsertId());
+
+        ActivityLog::record(
+            'tournament.create',
+            'tournament',
+            (int) $created['id'],
+            $created['name'] . ' ' . $created['season_year'],
+            [],
+            (int) $created['id']
+        );
+
+        return $created;
     }
 
     /**
@@ -229,7 +240,26 @@ final class TournamentService
 
         Database::exec('UPDATE tournaments SET ' . implode(', ', $set) . ' WHERE id = :id', $params);
 
-        return $this->find($tournamentId);
+        $after   = $this->find($tournamentId);
+        $changes = ActivityLog::diff($current, $after, [
+            'name', 'season_year', 'start_date', 'auction_date', 'end_date',
+            'team_name_change_deadline', 'registration_open', 'purse_per_team',
+            'min_squad_size', 'max_squad_size', 'max_overseas', 'bid_increment',
+            'bid_timer_seconds', 'overs_per_innings', 'status',
+        ]);
+
+        if ($changes !== []) {
+            ActivityLog::record(
+                'tournament.update',
+                'tournament',
+                $tournamentId,
+                (string) $current['name'],
+                $changes,
+                $tournamentId
+            );
+        }
+
+        return $after;
     }
 
     /**
@@ -256,6 +286,16 @@ final class TournamentService
                 [':id' => $tournamentId]
             );
 
+            ActivityLog::record(
+                'tournament.cancel',
+                'tournament',
+                $tournamentId,
+                (string) $current['name'],
+                ['status' => ['from' => $current['status'], 'to' => 'cancelled']],
+                $tournamentId,
+                'Nothing was deleted. Reinstate puts it back as a draft.'
+            );
+
             return $this->find($tournamentId);
         }
 
@@ -270,6 +310,16 @@ final class TournamentService
         Database::exec(
             "UPDATE tournaments SET status = 'draft' WHERE id = :id",
             [':id' => $tournamentId]
+        );
+
+        ActivityLog::record(
+            'tournament.reinstate',
+            'tournament',
+            $tournamentId,
+            (string) $current['name'],
+            ['status' => ['from' => 'cancelled', 'to' => 'draft']],
+            $tournamentId,
+            'Entries stay closed until somebody opens them.'
         );
 
         return $this->find($tournamentId);
@@ -495,6 +545,16 @@ final class TournamentService
             );
 
             if (!$approve) {
+                ActivityLog::record(
+                    'application.reject',
+                    'account',
+                    (int) $reg['user_id'],
+                    (string) $reg['name'],
+                    ['application' => ['from' => 'pending', 'to' => 'rejected']],
+                    (int) $reg['tournament_id'],
+                    $note
+                );
+
                 return [
                     'ok'      => true,
                     'status'  => 'rejected',
@@ -505,6 +565,29 @@ final class TournamentService
 
             $playerId = $this->enterAuctionPool($reg, $overrides);
             $lotId    = $this->queueLot((int) $reg['tournament_id'], $playerId);
+
+            // What approval set, recorded as the starting point every later
+            // edit on the Players screen is measured against.
+            $entered = (array) Database::one(
+                'SELECT base_price, auction_set, is_overseas, role FROM players WHERE id = :p',
+                [':p' => $playerId]
+            );
+
+            ActivityLog::record(
+                'application.approve',
+                'player',
+                $playerId,
+                (string) $reg['name'],
+                [
+                    'application' => ['from' => 'pending', 'to' => 'approved'],
+                    'base_price'  => ['from' => null, 'to' => $entered['base_price']  ?? null],
+                    'auction_set' => ['from' => null, 'to' => $entered['auction_set'] ?? null],
+                    'role'        => ['from' => null, 'to' => $entered['role']        ?? null],
+                    'is_overseas' => ['from' => null, 'to' => $entered['is_overseas'] ?? null],
+                ],
+                (int) $reg['tournament_id'],
+                $note
+            );
 
             return [
                 'ok'        => true,
@@ -669,6 +752,18 @@ final class TournamentService
                 [':team' => $teamId, ':id' => $ownerUserId]
             );
 
+            ActivityLog::record(
+                'team.create',
+                'team',
+                $teamId,
+                $name,
+                ['short_name' => ['from' => null, 'to' => $short],
+                 'owner'      => ['from' => null, 'to' => Database::scalar(
+                     'SELECT name FROM users WHERE id = :u', [':u' => $ownerUserId]
+                 )]],
+                $tournamentId
+            );
+
             return ['ok' => true, 'team_id' => $teamId, 'name' => $name, 'short_name' => $short];
         });
     }
@@ -698,8 +793,11 @@ final class TournamentService
         bool $actorIsAdmin = false,
         bool $canSetPurse = false
     ): array {
+        // The whole row, not just the fields that gate the edit: the
+        // activity log records what each field was before, and it cannot
+        // report a colour it never read.
         $team = Database::one(
-            'SELECT t.id, t.tournament_id, t.name, t.short_name,
+            'SELECT t.*,
                     tr.name AS tournament_name, tr.team_name_change_deadline
                FROM teams t
                JOIN tournaments tr ON tr.id = t.tournament_id
@@ -795,6 +893,23 @@ final class TournamentService
 
         if ($set !== []) {
             Database::exec('UPDATE teams SET ' . implode(', ', $set) . ' WHERE id = :id', $params);
+
+            $changes = ActivityLog::diff(
+                $team,
+                (array) Database::one('SELECT * FROM teams WHERE id = :id', [':id' => $teamId]),
+                ['name', 'short_name', 'primary_color', 'home_venue', 'purse_total']
+            );
+
+            if ($changes !== []) {
+                ActivityLog::record(
+                    'team.update',
+                    'team',
+                    $teamId,
+                    (string) $team['name'],
+                    $changes,
+                    $tournamentId
+                );
+            }
         }
 
         return ['ok' => true, 'team_id' => $teamId] + (array) Database::one(
@@ -810,7 +925,12 @@ final class TournamentService
     public function assignOwner(int $teamId, int $userId): array
     {
         return Database::transaction(function (PDO $pdo) use ($teamId, $userId): array {
-            $team = Database::one('SELECT id, name FROM teams WHERE id = :id', [':id' => $teamId]);
+            $team = Database::one(
+                'SELECT t.id, t.name, t.tournament_id,
+                        (SELECT u.name FROM users u WHERE u.team_id = t.id LIMIT 1) AS current_owner
+                   FROM teams t WHERE t.id = :id',
+                [':id' => $teamId]
+            );
 
             if ($team === null) {
                 throw new AccountException(AccountException::NOT_FOUND, 'No such team.', [], 404);
@@ -837,6 +957,18 @@ final class TournamentService
             Database::exec(
                 "UPDATE users SET role = 'team_owner', team_id = :team WHERE id = :user",
                 [':team' => $teamId, ':user' => $userId]
+            );
+
+            ActivityLog::record(
+                'team.assign_owner',
+                'team',
+                $teamId,
+                (string) $team['name'],
+                ['owner' => ['from' => $team['current_owner'], 'to' => $user['name']]],
+                (int) $team['tournament_id'],
+                $team['current_owner'] !== null
+                    ? 'The previous owner is now a viewer and may own another team.'
+                    : null
             );
 
             return ['ok' => true, 'team_id' => $teamId, 'team' => $team['name'],
@@ -1259,6 +1391,28 @@ final class TournamentService
                 Database::exec(
                     "UPDATE auction_lots SET base_price = :base WHERE id = :lot AND status = 'queued'",
                     [':base' => $newBase, ':lot' => (int) $player['lot_id']]
+                );
+            }
+
+            // Read the row back rather than trusting $in: what was stored is
+            // what was validated, trimmed and defaulted, and that is what the
+            // log should say happened.
+            $changes = ActivityLog::diff(
+                $player,
+                (array) Database::one('SELECT * FROM players WHERE id = :id', [':id' => $playerId]),
+                ['full_name', 'display_name', 'country', 'role', 'batting_style', 'bowling_style',
+                 'auction_set', 'base_price', 'is_overseas', 'is_capped',
+                 'career_matches', 'career_runs', 'career_wickets', 'strike_rate', 'economy']
+            );
+
+            if ($changes !== []) {
+                ActivityLog::record(
+                    'player.update',
+                    'player',
+                    $playerId,
+                    (string) $player['full_name'],
+                    $changes,
+                    (int) $player['tournament_id']
                 );
             }
 

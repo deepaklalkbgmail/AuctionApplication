@@ -43,6 +43,7 @@ $links = [
     ['href' => 'applications.php', 'label' => 'Applications'],
     ['href' => 'teams.php',        'label' => 'Teams', 'current' => true],
     ['href' => 'auction.php',      'label' => 'Auction'],
+    ['href' => 'activity.php',     'label' => 'Activity'],
 ];
 
 if ($all === []) {

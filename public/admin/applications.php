@@ -105,6 +105,7 @@ $links = [
     ['href' => 'players.php',      'label' => 'Players'],
     ['href' => 'teams.php',        'label' => 'Teams'],
     ['href' => 'auction.php',      'label' => 'Auction'],
+    ['href' => 'activity.php',     'label' => 'Activity'],
 ];
 
 page_head('Applications', '../', $links);

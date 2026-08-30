@@ -22,6 +22,7 @@ require_once dirname(__DIR__) . '/config/config.php';
 use App\Core\Auth;
 use App\Exceptions\AccountException;
 use App\Services\AccountService;
+use App\Services\ActivityLog;
 use App\Services\TournamentService;
 
 $passed = 0;
@@ -369,6 +370,102 @@ is('a blank purse leaves it alone',
 is('while the rest of the form saves',
     Database::scalar('SELECT home_venue FROM teams WHERE id = :t', [':t' => $teamId]),
     'Fort Kochi');
+
+// =====================================================================
+section('The activity log');
+
+$logged = static function (string $action): array {
+    $row = Database::one(
+        'SELECT * FROM activity_log WHERE action = :a ORDER BY id DESC LIMIT 1',
+        [':a' => $action]
+    );
+
+    if ($row === null) {
+        return [];
+    }
+
+    $row['decoded'] = $row['changes'] === null ? [] : json_decode((string) $row['changes'], true);
+
+    return $row;
+};
+
+is('the table is there', ActivityLog::isAvailable(), true);
+
+// Everything above this point ran as $ADMIN, so the trail should name them.
+actAs($ADMIN);
+$before = (int) Database::scalar('SELECT COUNT(*) FROM activity_log');
+
+$tournaments->updatePlayer($arun, ['base_price' => '7500', 'full_name' => 'Arun Nayar']);
+
+$line = $logged('player.update');
+is('an edit is recorded',            $line !== [], true);
+is('naming who did it',              $line['actor_name'] ?? null,
+    Database::scalar('SELECT name FROM users WHERE id = :i', [':i' => $ADMIN]));
+is('and which player',               $line['subject_label'] ?? null, 'Arun Nair');
+is('scoped to the tournament',       (int) ($line['tournament_id'] ?? 0), $A);
+is('with the OLD base price',        $line['decoded']['base_price']['from'] ?? null, '5000.00');
+is('and the new one',                $line['decoded']['base_price']['to'] ?? null, '7500.00');
+is('and the name that changed',      $line['decoded']['full_name']['to'] ?? null, 'Arun Nayar');
+
+// A save that changes nothing should not fill the log with empty lines.
+$countNow = (int) Database::scalar('SELECT COUNT(*) FROM activity_log');
+$tournaments->updatePlayer($arun, ['full_name' => 'Arun Nayar', 'base_price' => '7500']);
+is('a save that changes nothing is not recorded',
+    (int) Database::scalar('SELECT COUNT(*) FROM activity_log'), $countNow);
+
+// "5000" and "5000.00" are the same number, not a change.
+is('the same number in a different shape is not a change',
+    ActivityLog::diff(['base_price' => '5000.00'], ['base_price' => '5000'], ['base_price']), []);
+is('but a real move is',
+    array_keys(ActivityLog::diff(['base_price' => '5000.00'], ['base_price' => '6000'], ['base_price'])),
+    ['base_price']);
+
+// The purse edit.
+$tournaments->renameTeam($teamId, $ADMIN, ['home_venue' => 'Willingdon Island'],
+    actorIsAdmin: true, canSetPurse: true);
+$teamLine = $logged('team.update');
+is('a team edit is recorded',    $teamLine['subject_label'] ?? null, 'Harbour Kings');
+is('with the old ground',        $teamLine['decoded']['home_venue']['from'] ?? null, 'Fort Kochi');
+
+// A sale, which is the line an organiser is most likely to come looking for.
+$auction = new App\Services\AuctionService();
+$queued  = Database::one(
+    "SELECT l.id, l.base_price FROM auction_lots l JOIN players p ON p.id = l.player_id
+      WHERE l.tournament_id = :t AND l.status = 'queued' LIMIT 1",
+    [':t' => $A]
+);
+
+if ($queued !== null) {
+    // At the lot's own base price: a sale below it is refused, and this
+    // test is about the log, not about the floor.
+    $price = (float) $queued['base_price'];
+    $auction->recordSale((int) $queued['id'], $teamId, $price, $ADMIN);
+    $sale = $logged('auction.sold');
+    is('a sale is recorded',        $sale !== [], true);
+    is('with the buying team',      $sale['decoded']['sold_to']['to'] ?? null, 'Harbour Kings');
+    is('and the price',             $sale['decoded']['sold_price']['to'] ?? null,
+        number_format($price, 2, '.', ''));
+}
+
+// A missing table must never stop a change from being saved. This is the
+// property that matters most: the log is a witness, not a gatekeeper.
+Database::exec('DROP TABLE activity_log');
+is('the log knows it is gone', ActivityLog::isAvailable(), false);
+
+$survived = true;
+
+try {
+    $tournaments->updatePlayer($arun, ['full_name' => 'Arun Nair']);
+} catch (Throwable $e) {
+    $survived = false;
+}
+
+is('an edit still saves with no log table', $survived, true);
+is('and the change really landed',
+    Database::scalar('SELECT full_name FROM players WHERE id = :p', [':p' => $arun]),
+    'Arun Nair');
+is('reading an absent log returns nothing rather than throwing',
+    ActivityLog::recent(), []);
 
 // ---------------------------------------------------------------------
 
