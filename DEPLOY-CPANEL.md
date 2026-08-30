@@ -530,8 +530,20 @@ window the site keeps working normally.
    **Export** → **Go**. Keep the file. Everything below is additive, but a
    backup is what makes that claim testable rather than trusted.
 2. **Run the migrations**, in numerical order, one file at a time, through
-   phpMyAdmin's SQL tab with the database selected in the left sidebar. Each
-   file prints its own before/after check — read it before running the next.
+   phpMyAdmin's SQL tab. Each file prints its own before/after check — read
+   it before running the next.
+
+   > **Click your database in the LEFT SIDEBAR first**, then open the SQL
+   > tab. Opened from the server level no database is selected, `DATABASE()`
+   > is NULL, and everything keyed on it reports "missing" — on a database
+   > that may be perfectly fine. Every migration now refuses to run in that
+   > state and says so, rather than letting you read a screen of NOs and
+   > conclude something false.
+
+   **To check where a migration stands**, run `005_verify.sql`. It is
+   read-only, and it names the database on its first line instead of relying
+   on which one you clicked, so its answer does not depend on where you are
+   in phpMyAdmin. Edit that one line if your database is not `deamco_APL`.
 3. **Upload the files.**
    - With Git Version Control: Manage → Update from Remote → Deploy HEAD Commit.
    - Manually: upload the changed files. **Never overwrite `.env`.**

@@ -72,6 +72,34 @@
 
 
 /* =====================================================================
+   STEP -1 — Is a database actually selected?
+
+   THIS IS THE MOST COMMON WAY TO GET A WRONG ANSWER FROM THIS FILE, so
+   it is checked before anything else happens.
+
+   Everything below is keyed on DATABASE(). Open phpMyAdmin's SQL tab
+   from the SERVER level rather than from inside a database and
+   DATABASE() is NULL — at which point every check reports "missing" and
+   every ALTER fails, on a database that may be perfectly fine. It looks
+   exactly like a migration that never ran.
+
+   So: if no database is selected this stops here with a sentence saying
+   so, rather than letting you read three NOs and conclude something
+   false.
+
+   Click your database in the LEFT SIDEBAR first, then open the SQL tab.
+   ===================================================================== */
+SET @guard := IF(
+    DATABASE() IS NULL,
+    'SIGNAL SQLSTATE ''45000'' SET MESSAGE_TEXT = ''STOP - no database is selected. Click your database in the LEFT SIDEBAR, then open the SQL tab and run this file again. Nothing has been changed.''',
+    'DO 0'
+);
+PREPARE db_guard FROM @guard;
+EXECUTE db_guard;
+DEALLOCATE PREPARE db_guard;
+
+
+/* =====================================================================
    STEP 0 — What you have before anything changes.
 
    Keep this result. It is what step 6 is compared against.
