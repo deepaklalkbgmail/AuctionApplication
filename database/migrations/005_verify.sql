@@ -24,6 +24,23 @@
    VALUE, never used as a table name.
 
    ---------------------------------------------------------------------
+   AFTER RUNNING THIS, CLICK YOUR DATABASE AGAIN
+
+   This file has to end on information_schema - that is where the
+   "what is installed" answer lives, and it has to come after the parts
+   that read your own tables. phpMyAdmin then parks itself on
+   "Table: COLUMNS" and carries that into the next request.
+
+   So before you run anything else, click your database in the LEFT
+   SIDEBAR again. Forget, and the next file stops with
+
+       #1644 - STOP - the selected database is information_schema
+
+   which is the guard doing its job rather than anything being wrong.
+   The migrations themselves no longer end this way; only this file
+   does, because only this file has to.
+
+   ---------------------------------------------------------------------
    READING THE RESULT
 
    Three tables come back.

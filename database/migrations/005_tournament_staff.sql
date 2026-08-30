@@ -212,33 +212,20 @@ DEALLOCATE PREPARE step5;
 
 
 /* =====================================================================
-   STEP 6 - Done. All four should read OK.
+   STEP 6 - Done.
 
-   This is the LAST statement in the file, and the only one that reads
-   information_schema outside a SET. Nothing follows it, so nothing can
-   be caught out by phpMyAdmin switching the panel to
-   "Table: COLUMNS" afterwards.
+   Deliberately NOT an information_schema query, and deliberately not a
+   query against your own tables either. A plain literal names no table,
+   so phpMyAdmin has nothing to park on and the NEXT file you run still
+   sees your database selected.
 
-   For your row counts before and after, run 005_verify.sql.
+   An earlier version ended with an information_schema check, which left
+   phpMyAdmin on "Table: COLUMNS" and made the next run refuse with
+
+       #1644 - STOP - the selected database is information_schema
+
+   To see what is installed, run 005_verify.sql - clicking your database
+   in the left sidebar first, as always.
    ===================================================================== */
-SELECT 'users.role has tournament_admin' AS `check`,
-       IF(COUNT(*) = 1, 'OK', 'MISSING') AS `result`
-  FROM information_schema.COLUMNS
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND COLUMN_NAME = 'role'
-   AND COLUMN_TYPE LIKE '%tournament\\_admin%'
-UNION ALL
-SELECT 'users.tournament_id exists',
-       IF(COUNT(*) = 1, 'OK', 'MISSING')
-  FROM information_schema.COLUMNS
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND COLUMN_NAME = 'tournament_id'
-UNION ALL
-SELECT 'index idx_users_tournament',
-       IF(COUNT(*) > 0, 'OK', 'MISSING')
-  FROM information_schema.STATISTICS
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users' AND INDEX_NAME = 'idx_users_tournament'
-UNION ALL
-SELECT 'foreign key fk_users_tournament',
-       IF(COUNT(*) = 1, 'OK', 'MISSING')
-  FROM information_schema.TABLE_CONSTRAINTS
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'users'
-   AND CONSTRAINT_NAME = 'fk_users_tournament';
+SELECT CONCAT('Migration 005 finished on ', @db,
+              '. Run 005_verify.sql to confirm, clicking your database first.') AS `done`;

@@ -143,24 +143,21 @@ DEALLOCATE PREPARE first_line;
 
 
 /* ---------------------------------------------------------------------
-   3. Check.
+   3. Check, and DO NOT read information_schema to do it.
 
-   Two plain statements, and the ORDER MATTERS twice over.
+   Counting rows in activity_log proves the table exists just as well as
+   asking information_schema does, and it leaves phpMyAdmin looking at
+   YOUR database rather than at a system one.
 
-   The one reading your own tables runs FIRST, while the current database
-   is still yours. The one reading information_schema runs LAST, so
-   nothing follows it to be caught out by phpMyAdmin switching the panel
-   to "Table: TABLES".
+   That matters for the next thing you run. phpMyAdmin parks itself on
+   whatever table the last query named and carries that into the next
+   request - so a file that ends on information_schema makes the NEXT
+   file start with DATABASE() = information_schema, which the guard at
+   the top then refuses. A file that poisons the next run is a badly
+   built file.
 
-   Neither is a prepared statement, on purpose. phpMyAdmin cannot parse
-   EXECUTE, so a prepared statement that RETURNS ROWS makes it emit
-
-       Undefined array key "statement"   (and two more like it)
-
-   while it tries to build the sort links. Harmless, but alarming. A
-   prepared statement is only needed when the database name has to appear
-   as a TABLE name; as a value in a WHERE clause, as below, plain SQL
-   does the job.
+   The last statement is a plain literal, naming no table at all, so
+   there is nothing for phpMyAdmin to latch onto.
    --------------------------------------------------------------------- */
 SELECT 'lines recorded so far' AS `check`,
        CAST(COUNT(*) AS CHAR) AS `result` FROM `activity_log`
@@ -172,12 +169,5 @@ SELECT 'your sold lots (unchanged by this file)',
        CAST(COUNT(*) AS CHAR) FROM `auction_lots` WHERE `status` = 'sold';
 
 
-SELECT 'activity_log exists' AS `check`,
-       IF(COUNT(*) = 1, 'OK', 'MISSING') AS `result`
-  FROM information_schema.TABLES
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'activity_log'
-UNION ALL
-SELECT 'it has its indexes',
-       IF(COUNT(DISTINCT INDEX_NAME) >= 5, 'OK', 'INCOMPLETE')
-  FROM information_schema.STATISTICS
- WHERE TABLE_SCHEMA = @db AND TABLE_NAME = 'activity_log';
+SELECT CONCAT('Migration 006 finished on ', @db,
+              '. Run 005_verify.sql to confirm, clicking your database first.') AS `done`;
