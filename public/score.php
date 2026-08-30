@@ -61,13 +61,48 @@ $INNINGS_ID = filter_input(INPUT_GET, 'innings', FILTER_VALIDATE_INT) ?: 1;
 $live    = false;
 $initial = null;
 
-$canScore = Auth::check() && Auth::is(Auth::ROLE_SCORER, Auth::ROLE_ADMIN);
+// Re-read the session against the database before deciding anything. The
+// page is not behind Auth::require() — a signed-out visitor gets the
+// scorecard — so nothing else does it here, and without it a scorer whose
+// tournament was taken away keeps being shown a writable pad until they
+// sign out. The API refuses them either way; this stops the pad from lying
+// about it.
+$canScore = Auth::check() && Auth::refresh() && Auth::is(Auth::ROLE_SCORER, Auth::ROLE_ADMIN);
+
+// Why a scorer may not write here, when that is the case. Set below, once
+// the innings is known — it is the innings that names the tournament.
+$scoreBlocked = null;
 
 if (Database::isAvailable()) {
     try {
         // Read the card for anyone — a viewer follows the same match, they
         // simply cannot save. Only a scorer or admin gets a writable pad.
         $initial = (new ScoringService())->scorecard($INNINGS_ID);
+
+        // A scorer belongs to one tournament and may score only that one.
+        // Reading is unrestricted: the scorecard is public, and a scorer
+        // watching another tournament is a spectator like anyone else. It
+        // is saving that is scoped.
+        if ($canScore && Auth::is(Auth::ROLE_SCORER)) {
+            $ofTournament = Database::scalar(
+                'SELECT m.tournament_id
+                   FROM innings i JOIN matches m ON m.id = i.match_id
+                  WHERE i.id = :i',
+                [':i' => $INNINGS_ID]
+            );
+            $ofTournament = $ofTournament === null ? null : (int) $ofTournament;
+
+            if (Auth::tournamentId() === null) {
+                $canScore     = false;
+                $scoreBlocked = 'You have not been given a tournament yet, so there is nothing you can score. '
+                              . 'An administrator sets that under Administration → People.';
+            } elseif (!Auth::worksOn($ofTournament)) {
+                $canScore     = false;
+                $scoreBlocked = 'This match belongs to a different tournament from the one you score for. '
+                              . 'You can follow it here, but not record anything.';
+            }
+        }
+
         $live    = $canScore;
 
         $match['overs_per_innings'] = $initial['innings']['overs_limit'];
@@ -86,9 +121,11 @@ if (Database::isAvailable()) {
 if ($initial === null && IS_PRODUCTION) {
     $emptyTitle = 'No match is being scored';
     $emptyBody  = 'When a fixture goes live and its first innings is opened, the scoring pad and the live scorecard appear here.';
-    $emptyHint  = Auth::is(Auth::ROLE_ADMIN, Auth::ROLE_SCORER)
-        ? 'A match needs status "live", both playing elevens recorded, and an open innings. Section 4.3 of the User Guide has the steps.'
-        : null;
+    $emptyHint  = Auth::is(Auth::ROLE_SCORER) && Auth::tournamentId() === null
+        ? 'You have not been given a tournament yet. An administrator sets that under Administration → People.'
+        : (Auth::is(Auth::ROLE_ADMIN, Auth::ROLE_SCORER)
+            ? 'A match needs status "live", both playing elevens recorded, and an open innings. Section 4.3 of the User Guide has the steps.'
+            : null);
 
     require dirname(__DIR__) . '/app/Views/partials/empty_state.php';
     exit;
@@ -222,6 +259,20 @@ $bootstrap = Security::json([
             </div>
         </div>
     </header>
+
+    <?php // A scorer who cannot write here is told why, once, at the top —
+          // rather than discovering it when a ball silently fails to save. ?>
+    <?php if ($scoreBlocked !== null): ?>
+        <div class="mb-3 flex items-start gap-2.5 rounded-2xl border border-amber-400/30 bg-amber-500/10 px-3.5 py-3 text-amber-200">
+            <svg class="mt-0.5 h-4 w-4 shrink-0" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 0 1 .75.75v3.5a.75.75 0 0 1-1.5 0v-3.5A.75.75 0 0 1 10 5zm0 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2z" clip-rule="evenodd" />
+            </svg>
+            <p class="text-[12.5px] font-semibold leading-relaxed">
+                <span class="font-black uppercase tracking-wider">Read only</span> —
+                <?= e($scoreBlocked) ?>
+            </p>
+        </div>
+    <?php endif; ?>
 
     <div class="grid gap-3 lg:grid-cols-[minmax(0,1fr)_360px]">
 

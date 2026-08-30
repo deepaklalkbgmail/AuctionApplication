@@ -25,12 +25,16 @@ use App\Core\Security;
 use App\Exceptions\AccountException;
 use App\Services\TournamentService;
 
-Auth::require(Auth::ROLE_ADMIN);
+// A tournament administrator gets this screen for their own tournament:
+// teams belong to one tournament. The scope is enforced twice — the
+// list they are offered is narrowed, and the id they end up on is checked.
+Auth::require(Auth::ROLE_ADMIN, Auth::ROLE_TADMIN);
 
 $tournaments = new TournamentService();
 $error       = null;
+$isAdmin     = Auth::is(Auth::ROLE_ADMIN);
 
-$all = $tournaments->listTournaments();
+$all = $tournaments->listTournamentsForCurrentUser();
 
 $links = [
     ['href' => 'index.php',        'label' => 'Overview'],
@@ -39,6 +43,7 @@ $links = [
     ['href' => 'applications.php', 'label' => 'Applications'],
     ['href' => 'teams.php',        'label' => 'Teams', 'current' => true],
     ['href' => 'auction.php',      'label' => 'Auction'],
+    ['href' => 'activity.php',     'label' => 'Activity'],
 ];
 
 if ($all === []) {
@@ -60,6 +65,18 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $action       = (string) ($_POST['action'] ?? '');
         $tournamentId = (int) ($_POST['tournament_id'] ?? 0);
 
+        // Creating a team uses the posted tournament, so check it. Assigning
+        // and renaming act on a team, so check the tournament that team
+        // really belongs to rather than whatever the form claimed.
+        Auth::requireWorksOn($tournamentId ?: null);
+
+        if (($_POST['team_id'] ?? '') !== '') {
+            Auth::requireWorksOn((int) Database::scalar(
+                'SELECT tournament_id FROM teams WHERE id = :t',
+                [':t' => (int) $_POST['team_id']]
+            ) ?: null);
+        }
+
         try {
             switch ($action) {
                 case 'create':
@@ -80,11 +97,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                     break;
 
                 case 'rename':
+                    // Staff, so the ownership check and the name deadline do
+                    // not apply. The purse is separate: a tournament
+                    // administrator is never shown that field, and passing
+                    // the flag is what stops them posting it anyway.
                     $tournaments->renameTeam(
                         (int) ($_POST['team_id'] ?? 0),
                         (int) Auth::id(),
                         $_POST,
-                        actorIsAdmin: true
+                        actorIsAdmin: true,
+                        canSetPurse: $isAdmin
                     );
                     flash('success', 'Team updated.');
                     break;
@@ -99,6 +121,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $tournamentId = isset($_GET['tournament']) ? (int) $_GET['tournament'] : (int) $all[0]['id'];
+Auth::requireWorksOn($tournamentId);
 $tournament   = $tournaments->find($tournamentId);
 $teams        = $tournaments->teams($tournamentId);
 
@@ -171,25 +194,43 @@ page_message($error);
                     </div>
                 </div>
 
-                <div class="mt-4 grid gap-4 border-t border-white/5 pt-4 sm:grid-cols-2">
-                    <form method="post" class="flex flex-wrap items-end gap-3">
+                <div class="mt-4 border-t border-white/5 pt-4">
+                    <?php // Everything the team was created with, editable
+                          // here. The purse is administrator-only, because
+                          // moving it after an auction has started rewrites
+                          // what every remaining bid can be. ?>
+                    <form method="post" class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="rename">
                         <input type="hidden" name="team_id" value="<?= (int) $team['id'] ?>">
                         <input type="hidden" name="tournament_id" value="<?= $tournamentId ?>">
 
-                        <div class="min-w-[10rem] flex-1">
-                            <?php field('name', 'Rename', (string) $team['name']); ?>
+                        <?php
+                        field('name', 'Team name', (string) $team['name']);
+                        field('short_name', 'Short name', (string) $team['short_name']);
+                        field('primary_color', 'Team colour', (string) $team['primary_color'], 'color', false);
+                        field('home_venue', 'Home ground', (string) ($team['home_venue'] ?? ''), 'text', false);
+
+                        if ($isAdmin) {
+                            field(
+                                'purse_total',
+                                'Purse',
+                                (string) (int) round((float) $team['purse_total']),
+                                'number',
+                                false,
+                                'Cannot go below the ' . rupees($team['purse_spent']) . ' already spent.'
+                            );
+                        }
+                        ?>
+
+                        <div class="sm:col-span-2 lg:col-span-4">
+                            <button type="submit" class="rounded-lg border border-white/10 px-4 py-2.5 text-[12px] font-bold text-slate-300 hover:bg-white/5">
+                                Save team details
+                            </button>
                         </div>
-                        <div class="w-24">
-                            <?php field('short_name', 'Short', (string) $team['short_name']); ?>
-                        </div>
-                        <button type="submit" class="mb-0.5 rounded-lg border border-white/10 px-3 py-2.5 text-[12px] font-bold text-slate-300 hover:bg-white/5">
-                            Save
-                        </button>
                     </form>
 
-                    <form method="post" class="flex flex-wrap items-end gap-3">
+                    <form method="post" class="mt-4 flex flex-wrap items-end gap-3 border-t border-white/5 pt-4">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="assign">
                         <input type="hidden" name="team_id" value="<?= (int) $team['id'] ?>">

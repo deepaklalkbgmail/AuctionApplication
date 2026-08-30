@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services;
 
 use App\Exceptions\AuctionException;
+use App\Services\ActivityLog;
 use Database;
 use PDO;
 
@@ -411,6 +412,22 @@ final class AuctionService
 
             $fresh = $this->lockTeam($teamId);
 
+            // An undo is a correction, and a correction is exactly the sort
+            // of thing somebody asks about later. Recorded with what was
+            // given back and to whom.
+            ActivityLog::record(
+                'auction.undo',
+                'player',
+                (int) $lot['player_id'],
+                (string) $lot['full_name'],
+                [
+                    'sold_to'    => ['from' => $team['name'], 'to' => null],
+                    'sold_price' => ['from' => $price, 'to' => null],
+                ],
+                (int) $lot['tournament_id'],
+                'Sale reversed; the lot is back in the queue.'
+            );
+
             return [
                 'ok'         => true,
                 'outcome'    => 'undone',
@@ -475,6 +492,25 @@ final class AuctionService
               WHERE lot_id = :lot AND team_id = :team AND bid_amount = :price',
             [':lot' => $lotId, ':team' => $teamId, ':price' => $priceRupees]
         );
+
+        // Logged here rather than in sell() and recordSale() separately: a
+        // sale is the change an organiser is most often asked about
+        // afterwards, and one seam means the two paths cannot drift into
+        // recording it differently.
+        ActivityLog::record(
+            'auction.sold',
+            'player',
+            (int) $lot['player_id'],
+            (string) $lot['full_name'],
+            [
+                'sold_to'    => ['from' => null, 'to' => Database::scalar(
+                    'SELECT name FROM teams WHERE id = :t', [':t' => $teamId]
+                )],
+                'sold_price' => ['from' => null, 'to' => $priceRupees],
+            ],
+            (int) $lot['tournament_id'],
+            'Lot ' . (int) ($lot['lot_order'] ?? 0) . ' closed.'
+        );
     }
 
     /**
@@ -508,6 +544,16 @@ final class AuctionService
             Database::run(
                 'UPDATE players SET status = :unsold WHERE id = :player',
                 [':unsold' => 'unsold', ':player' => (int) $lot['player_id']]
+            );
+
+            ActivityLog::record(
+                'auction.unsold',
+                'player',
+                (int) $lot['player_id'],
+                (string) $lot['full_name'],
+                ['status' => ['from' => $lot['status'], 'to' => 'unsold']],
+                (int) $lot['tournament_id'],
+                'Lot ' . (int) $lot['lot_order'] . ' passed over.'
             );
 
             return [
@@ -722,7 +768,8 @@ final class AuctionService
     private function lockLot(int $lotId): array
     {
         $lot = Database::one(
-            'SELECT l.id, l.tournament_id, l.player_id, l.status, l.base_price, l.current_bid,
+            'SELECT l.id, l.tournament_id, l.player_id, l.lot_order, l.status,
+                    l.base_price, l.current_bid,
                     l.current_bidder_team_id, l.bid_count, l.ends_at,
                     (l.ends_at IS NOT NULL AND l.ends_at < NOW()) AS is_expired,
                     p.full_name, p.is_overseas

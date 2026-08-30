@@ -101,3 +101,27 @@ VALUES
      'admin',
      'approved',
      1);
+
+/*
+   ---------------------------------------------------------------------
+   The activity log, last of all.
+
+   Deliberately at the END. If your database has not had migration 006
+   run against it there is no activity_log table, these two statements
+   fail with "Table doesn't exist", and NOTHING ABOVE IS AFFECTED — the
+   reset has already finished by the time they run. Ignore the error.
+
+   The log is cleared because a reset is a fresh start: lines about
+   players who no longer exist are noise, not evidence. The first line
+   below records the reset itself, so the trail begins where the data
+   does.
+   ---------------------------------------------------------------------
+*/
+DELETE FROM `activity_log`;
+ALTER TABLE `activity_log` AUTO_INCREMENT = 1;
+
+INSERT INTO `activity_log`
+    (`actor_name`, `actor_role`, `action`, `subject_type`, `subject_label`, `note`)
+VALUES
+    ('system', 'system', 'log.enabled', 'system', 'Database reset',
+     'Everything was emptied and one administrator created. The trail starts here.');

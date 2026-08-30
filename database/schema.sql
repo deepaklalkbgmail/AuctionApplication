@@ -43,6 +43,7 @@ USE `cric_auction`;
 /* --------------------------- end of the shared-hosting cut ------------ */
 
 SET FOREIGN_KEY_CHECKS = 0;
+DROP TABLE IF EXISTS `activity_log`;
 DROP TABLE IF EXISTS `ball_by_ball`;
 DROP TABLE IF EXISTS `innings`;
 DROP TABLE IF EXISTS `match_squads`;
@@ -185,11 +186,17 @@ CREATE TABLE `users` (
    soon as the person chooses their own.
 */
     `must_change_password` TINYINT(1) NOT NULL DEFAULT 0,
-    `role`           ENUM('admin','team_owner','scorer','viewer','player') NOT NULL DEFAULT 'viewer',
+    `role`           ENUM('admin','tournament_admin','team_owner','scorer','viewer','player') NOT NULL DEFAULT 'viewer',
     `status`         ENUM('pending','approved','rejected','suspended') NOT NULL DEFAULT 'approved',
     `approved_by`    INT UNSIGNED     NULL,
     `approved_at`    DATETIME         NULL,
     `team_id`        INT UNSIGNED     NULL,  /* required for team_owner, NULL otherwise */
+/*
+   Which tournament a scorer or a tournament administrator works on.
+   NULL for everybody else. Not unique: a tournament may have as many
+   scorers as it needs.
+*/
+    `tournament_id`  INT UNSIGNED     NULL,
     `avatar_url`     VARCHAR(255)     NULL,
     `is_active`      TINYINT(1)   NOT NULL DEFAULT 1,
     `last_login_at`  DATETIME         NULL,
@@ -207,9 +214,17 @@ CREATE TABLE `users` (
     UNIQUE KEY `uq_users_owner_team` (`team_id`),
     KEY `idx_users_role` (`role`, `is_active`),
     KEY `idx_users_status` (`status`, `role`),
+    KEY `idx_users_tournament` (`tournament_id`, `role`),
 
     CONSTRAINT `fk_users_team`
         FOREIGN KEY (`team_id`) REFERENCES `teams` (`id`),
+/*
+   Deleting a tournament must not be blocked by its staff, and must not
+   delete their accounts either: they simply become unassigned.
+*/
+    CONSTRAINT `fk_users_tournament`
+        FOREIGN KEY (`tournament_id`) REFERENCES `tournaments` (`id`)
+        ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT `fk_users_approved_by`
         FOREIGN KEY (`approved_by`) REFERENCES `users` (`id`),
 
@@ -653,6 +668,51 @@ CREATE TABLE `ball_by_ball` (
         (`extra_type` IN ('wide','no_ball') AND `is_legal_delivery` = 0)
         OR (`extra_type` NOT IN ('wide','no_ball') AND `is_legal_delivery` = 1)
     )
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+/*
+   ---------------------------------------------------------------------
+   activity_log — who changed what, and what it was before.
+
+   Written by the application on every administrative change: approving
+   somebody, editing a player, moving a purse, selling a lot, cancelling
+   a tournament. `changes` holds a small JSON object of the fields that
+   actually moved, each with its old and new value, so the row answers
+   "what did that price used to be" without a backup.
+
+   Deliberately NO foreign keys. A log whose rows disappear when the
+   thing they describe is deleted is not a log — the moment you most
+   want to know who deleted the team is the moment the FK would have
+   removed the evidence. actor_name is denormalised for the same reason.
+
+   Append-only by convention: nothing in the application updates or
+   deletes a row here.
+   ---------------------------------------------------------------------
+*/
+CREATE TABLE `activity_log` (
+    `id`            BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    `at`            TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    `actor_user_id` INT UNSIGNED     NULL,  /* NULL = the command line */
+    `actor_name`    VARCHAR(120) NOT NULL DEFAULT 'system',
+    `actor_role`    VARCHAR(40)  NOT NULL DEFAULT 'system',
+
+    `action`        VARCHAR(40)  NOT NULL,  /* 'player.update', 'auction.sold' */
+    `subject_type`  VARCHAR(30)  NOT NULL,  /* 'player', 'team', 'account' */
+    `subject_id`    INT UNSIGNED     NULL,
+    `subject_label` VARCHAR(160) NOT NULL DEFAULT '',  /* the name, as it read at the time */
+
+    `tournament_id` INT UNSIGNED     NULL,  /* so a tournament admin sees only theirs */
+    `changes`       TEXT             NULL,  /* JSON {field: {from, to}} */
+    `note`          VARCHAR(255)     NULL,
+    `ip`            VARCHAR(45)      NULL,
+
+    PRIMARY KEY (`id`),
+    KEY `idx_log_at`         (`at`),
+    KEY `idx_log_tournament` (`tournament_id`, `at`),
+    KEY `idx_log_subject`    (`subject_type`, `subject_id`, `at`),
+    KEY `idx_log_actor`      (`actor_user_id`, `at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 

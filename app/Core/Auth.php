@@ -9,7 +9,17 @@ use PDO;
 /**
  * Session-backed authentication and role gating.
  *
- * Roles: admin | team_owner | scorer | viewer | player
+ * Roles: admin | tournament_admin | team_owner | scorer | viewer | player
+ *
+ * Two of those are scoped to a single tournament, through
+ * users.tournament_id:
+ *
+ *   tournament_admin  runs one tournament — approves the applications for
+ *                     it, its teams, its auction. Cannot approve a
+ *                     player's ACCOUNT; that stays with an administrator.
+ *   scorer            scores the matches of one tournament.
+ *
+ * An administrator is scoped to nothing and may do all of it.
  *
  * Signing in takes either a username or an email address, because a player
  * chooses a username at registration but a scorer is handed one by an
@@ -18,6 +28,7 @@ use PDO;
 final class Auth
 {
     public const ROLE_ADMIN  = 'admin';
+    public const ROLE_TADMIN = 'tournament_admin';
     public const ROLE_OWNER  = 'team_owner';
     public const ROLE_SCORER = 'scorer';
     public const ROLE_VIEWER = 'viewer';
@@ -40,7 +51,7 @@ final class Auth
 
         $stmt = $pdo->prepare(
             'SELECT id, username, name, email, password_hash, role, status,
-                    must_change_password, team_id, avatar_url, photo_path
+                    must_change_password, team_id, tournament_id, avatar_url, photo_path
                FROM users
               WHERE (username = :username OR email = :email) AND is_active = 1
               LIMIT 1'
@@ -90,6 +101,7 @@ final class Auth
             'email'      => $user['email'],
             'role'       => $user['role'],
             'team_id'    => $user['team_id'] !== null ? (int) $user['team_id'] : null,
+            'tournament_id' => $user['tournament_id'] !== null ? (int) $user['tournament_id'] : null,
             'avatar_url' => $user['avatar_url'],
             'photo_path' => $user['photo_path'],
             // A password an administrator issued is a temporary one. Every
@@ -174,6 +186,64 @@ final class Auth
         return self::user()['team_id'] ?? null;
     }
 
+    /**
+     * The tournament a scorer or tournament administrator belongs to.
+     * Null for an administrator — they are not scoped to one — and null
+     * for staff who have not been given one yet.
+     */
+    public static function tournamentId(): ?int
+    {
+        $id = self::user()['tournament_id'] ?? null;
+
+        return $id === null ? null : (int) $id;
+    }
+
+    /**
+     * May this person act on this tournament?
+     *
+     * An administrator may act on any. A tournament administrator or a
+     * scorer may act only on the one they belong to. Everybody else, no.
+     *
+     * The single place this question is answered, so a screen cannot
+     * accidentally disagree with the screen next to it.
+     */
+    public static function worksOn(?int $tournamentId): bool
+    {
+        if (self::is(self::ROLE_ADMIN)) {
+            return true;
+        }
+
+        if (!self::is(self::ROLE_TADMIN, self::ROLE_SCORER)) {
+            return false;
+        }
+
+        $mine = self::tournamentId();
+
+        return $mine !== null && $tournamentId !== null && $mine === $tournamentId;
+    }
+
+    /** Shorthand for the screens an administrator and a tournament administrator share. */
+    public static function isAnyAdmin(): bool
+    {
+        return self::is(self::ROLE_ADMIN, self::ROLE_TADMIN);
+    }
+
+    /**
+     * Hard gate on a tournament. Halts the request rather than rendering a
+     * page scoped to somebody else's season.
+     *
+     * Needed because ?tournament=N is a query string: without this, a
+     * tournament administrator could read another tournament's
+     * applications by editing the address.
+     */
+    public static function requireWorksOn(?int $tournamentId): void
+    {
+        if (!self::worksOn($tournamentId)) {
+            http_response_code(403);
+            exit('403 — That tournament is not yours to work on.');
+        }
+    }
+
     public static function is(string ...$roles): bool
     {
         return in_array(self::role(), $roles, true);
@@ -203,7 +273,7 @@ final class Auth
 
         try {
             $row = \Database::one(
-                'SELECT role, status, team_id, must_change_password, is_active
+                'SELECT role, status, team_id, tournament_id, must_change_password, is_active
                    FROM users WHERE id = :id',
                 [':id' => $id]
             );
@@ -219,6 +289,7 @@ final class Auth
 
         $_SESSION['user']['role']                 = $row['role'];
         $_SESSION['user']['team_id']              = $row['team_id'] !== null ? (int) $row['team_id'] : null;
+        $_SESSION['user']['tournament_id']         = $row['tournament_id'] !== null ? (int) $row['tournament_id'] : null;
         $_SESSION['user']['must_change_password'] = (int) $row['must_change_password'] === 1;
 
         return true;

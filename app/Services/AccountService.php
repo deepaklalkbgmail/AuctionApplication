@@ -157,6 +157,16 @@ final class AccountService
             [':status' => $approve ? 'approved' : 'rejected', ':admin' => $adminId, ':id' => $userId]
         );
 
+        ActivityLog::record(
+            $approve ? 'account.approve' : 'account.reject',
+            'account',
+            $userId,
+            (string) $user['name'],
+            ['status' => ['from' => $user['status'], 'to' => $approve ? 'approved' : 'rejected']],
+            null,
+            $user['email'] ?? null
+        );
+
         return ['ok' => true, 'user_id' => $userId, 'status' => $approve ? 'approved' : 'rejected'];
     }
 
@@ -238,24 +248,76 @@ final class AccountService
         }
 
         Database::exec("UPDATE users SET {$set} WHERE id = :id", $params);
+
+        $changes = ActivityLog::diff(
+            $user,
+            (array) Database::one('SELECT * FROM users WHERE id = :id', [':id' => $userId]),
+            ['name', 'email', 'phone', 'address', 'player_type', 'status', 'photo_path']
+        );
+
+        if ($changes !== []) {
+            ActivityLog::record('account.update', 'account', $userId, $name, $changes);
+        }
     }
 
     // -----------------------------------------------------------------
     //  Staff accounts
     // -----------------------------------------------------------------
 
+    /** Staff roles that must name the tournament they work on. */
+    public const TOURNAMENT_SCOPED_ROLES = ['scorer', 'tournament_admin'];
+
     /**
-     * An administrator creates a scorer (or another admin) and hands over the
-     * credentials. The account is approved immediately — an administrator
-     * approving their own creation would be theatre — but is forced to change
-     * the password at first sign-in, so the issued one is never permanent.
+     * An administrator creates a scorer, a tournament administrator, or
+     * another admin, and hands over the credentials. The account is
+     * approved immediately — an administrator approving their own creation
+     * would be theatre — but is forced to change the password at first
+     * sign-in, so the issued one is never permanent.
      *
+     * A scorer and a tournament administrator belong to ONE tournament and
+     * must be given it here. That is what stops a scorer opening a match
+     * from a season they have nothing to do with. Any number of them may
+     * share a tournament.
+     *
+     * @param int|null $tournamentId required for scorer and tournament_admin
      * @return array{user_id:int,username:string,password:string}
      */
-    public function createStaffAccount(string $name, string $username, string $email, string $role, ?string $password = null): array
-    {
-        if (!in_array($role, ['scorer', 'admin', 'viewer'], true)) {
-            throw new AccountException(AccountException::VALIDATION, 'Staff accounts may be scorer, admin or viewer.');
+    public function createStaffAccount(
+        string $name,
+        string $username,
+        string $email,
+        string $role,
+        ?string $password = null,
+        ?int $tournamentId = null,
+    ): array {
+        if (!in_array($role, ['scorer', 'tournament_admin', 'admin', 'viewer'], true)) {
+            throw new AccountException(
+                AccountException::VALIDATION,
+                'Staff accounts may be scorer, tournament administrator, admin or viewer.'
+            );
+        }
+
+        if (in_array($role, self::TOURNAMENT_SCOPED_ROLES, true)) {
+            if ($tournamentId === null || $tournamentId <= 0) {
+                throw new AccountException(
+                    AccountException::VALIDATION,
+                    $role === 'scorer'
+                        ? 'Choose which tournament this scorer will score.'
+                        : 'Choose which tournament this administrator will run.'
+                );
+            }
+
+            if ((int) Database::scalar(
+                'SELECT COUNT(*) FROM tournaments WHERE id = :t',
+                [':t' => $tournamentId]
+            ) === 0) {
+                throw new AccountException(AccountException::NOT_FOUND, 'No such tournament.', [], 404);
+            }
+        } else {
+            // An administrator is scoped to nothing; a viewer to nothing.
+            // Silently dropping a tournament here rather than refusing,
+            // because the form always posts the box whatever role is picked.
+            $tournamentId = null;
         }
 
         $name     = $this->text($name, 'Full name', 2, 120);
@@ -269,14 +331,77 @@ final class AccountService
         $this->assertPasswordStrong($password);
 
         Database::run(
-            'INSERT INTO users (username, name, email, password_hash, role, status, must_change_password)
-             VALUES (:username, :name, :email, :hash, :role, :status, 1)',
+            'INSERT INTO users (username, name, email, password_hash, role, status, must_change_password, tournament_id)
+             VALUES (:username, :name, :email, :hash, :role, :status, 1, :tournament)',
             [':username' => $username, ':name' => $name, ':email' => $email,
              ':hash' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]),
-             ':role' => $role, ':status' => 'approved']
+             ':role' => $role, ':status' => 'approved', ':tournament' => $tournamentId]
         );
 
-        return ['user_id' => Database::lastInsertId(), 'username' => $username, 'password' => $password];
+        $newId = Database::lastInsertId();
+
+        // The password is deliberately NOT in the log. It is handed over
+        // once, in person or down a phone, and a log an organiser can read
+        // is a log an organiser could paste.
+        ActivityLog::record(
+            'account.create_staff',
+            'account',
+            $newId,
+            $name,
+            ['role' => ['from' => null, 'to' => $role],
+             'tournament_id' => ['from' => null, 'to' => $tournamentId]],
+            $tournamentId,
+            $username
+        );
+
+        return ['user_id' => $newId, 'username' => $username, 'password' => $password];
+    }
+
+    /**
+     * Move a scorer or tournament administrator to a different tournament,
+     * or clear it.
+     *
+     * Kept separate from the general edit so the role and the tournament
+     * cannot drift apart: a scorer without one can score nothing, and the
+     * scoring pad says exactly that rather than showing an empty list.
+     */
+    public function setStaffTournament(int $userId, ?int $tournamentId): void
+    {
+        $user = $this->findUser($userId);
+
+        if (!in_array($user['role'], self::TOURNAMENT_SCOPED_ROLES, true)) {
+            throw new AccountException(
+                AccountException::VALIDATION,
+                'Only a scorer or a tournament administrator belongs to a tournament.'
+            );
+        }
+
+        if ($tournamentId !== null && (int) Database::scalar(
+            'SELECT COUNT(*) FROM tournaments WHERE id = :t',
+            [':t' => $tournamentId]
+        ) === 0) {
+            throw new AccountException(AccountException::NOT_FOUND, 'No such tournament.', [], 404);
+        }
+
+        Database::exec(
+            'UPDATE users SET tournament_id = :t WHERE id = :id',
+            [':t' => $tournamentId, ':id' => $userId]
+        );
+
+        // Worth a line of its own: this is what decides whether somebody can
+        // score or administer at all, and "why can the scorer not save?" is
+        // a question the log should be able to answer.
+        ActivityLog::record(
+            'account.set_tournament',
+            'account',
+            $userId,
+            (string) $user['name'],
+            ['tournament_id' => [
+                'from' => $user['tournament_id'] ?? null,
+                'to'   => $tournamentId,
+            ]],
+            $tournamentId
+        );
     }
 
     // -----------------------------------------------------------------
@@ -314,7 +439,7 @@ final class AccountService
      */
     public function adminResetPassword(int $userId, ?string $password = null): string
     {
-        $this->findUser($userId);
+        $user = $this->findUser($userId);
 
         $password ??= $this->readablePassword();
         $this->assertPasswordStrong($password);
@@ -322,6 +447,17 @@ final class AccountService
         Database::exec(
             'UPDATE users SET password_hash = :hash, must_change_password = 1 WHERE id = :id',
             [':hash' => password_hash($password, PASSWORD_BCRYPT, ['cost' => 12]), ':id' => $userId]
+        );
+
+        // That a reset happened, never what it was reset to.
+        ActivityLog::record(
+            'account.reset_password',
+            'account',
+            $userId,
+            (string) $user['name'],
+            [],
+            null,
+            'A new password was issued and must be changed at next sign-in.'
         );
 
         return $password;

@@ -456,6 +456,99 @@ scorer.
 
 ---
 
+## Module 12a — Tournament administrators and scorers
+
+**Goal:** somebody who runs one tournament sees one tournament, and somebody
+who scores one tournament can only score that one.
+
+You will need **two** tournaments for this. Create a second one under
+**Administration → Tournaments** if you only have the one — any dates will do.
+
+### Making the accounts
+
+| # | Do this | Should happen | ✓ |
+|---|---------|---------------|---|
+| 12a.1 | **Administration → People → Create a scorer or administrator.** Choose role **Scorer** and leave the tournament unset | It refuses: a scorer must be given a tournament | ☐ |
+| 12a.2 | Pick the first tournament and save | The account is created, with the credentials shown once | ☐ |
+| 12a.3 | Create a **second** scorer on the **same** tournament | Allowed — any number of scorers may share one | ☐ |
+| 12a.4 | Create a **Tournament administrator** on the first tournament | Created, and the row shows a tournament badge | ☐ |
+| 12a.5 | Create a scorer and a tournament administrator on the **second** tournament | Same again | ☐ |
+
+### What a tournament administrator can reach
+
+Sign in as the tournament administrator for the **first** tournament.
+
+| # | Do this | Should happen | ✓ |
+|---|---------|---------------|---|
+| 12a.6 | Look at the top bar | **People** and **Tournaments** are not there | ☐ |
+| 12a.7 | Type `admin/users.php` in the address bar | 403 | ☐ |
+| 12a.8 | Type `admin/tournaments.php` | 403 | ☐ |
+| 12a.9 | Open **Applications**, **Players**, **Teams**, **Auction** | Each opens, on their own tournament, with no picker for the other | ☐ |
+| 12a.10 | On any of those four, edit the address to `?tournament=` the **other** tournament's number | 403 — that tournament is not yours to work on | ☐ |
+| 12a.11 | Open **Teams** and look at a team's details | Name, short name, colour and home ground — **no purse field** | ☐ |
+| 12a.12 | Sign in as a full **administrator** and open the same screen | The purse field is there | ☐ |
+
+### What a scorer can do
+
+Sign in as the scorer for the **first** tournament. You will need a live match
+in each tournament — see Module 11.
+
+| # | Do this | Should happen | ✓ |
+|---|---------|---------------|---|
+| 12a.13 | Open the pad on their own tournament's match | Badge reads **Saving**; the run keys work | ☐ |
+| 12a.14 | Open the pad on the **other** tournament's match | An amber **Read only** bar: "This match belongs to a different tournament" | ☐ |
+| 12a.15 | On that same screen, try to record a ball | Nothing is saved | ☐ |
+| 12a.16 | Sign in as an **administrator** and open either match | Both are writable — an administrator is scoped to nothing | ☐ |
+| 12a.17 | As an administrator, **Set tournament** to blank on the first scorer | Saved; the account still exists | ☐ |
+| 12a.18 | Sign in as that scorer and open any pad | Read only, saying to ask an administrator for a tournament | ☐ |
+| 12a.19 | Put the tournament back | The pad is writable again | ☐ |
+
+---
+
+## Module 12b — Correcting a player after approval
+
+**Goal:** the base price and everything else set at approval can be fixed
+from a screen, and the auction sheet agrees with it.
+
+| # | Do this | Should happen | ✓ |
+|---|---------|---------------|---|
+| 12b.1 | **Administration → Players.** Click a player who has **not** been called at the auction | The panel opens with every field filled in | ☐ |
+| 12b.2 | Change the base price to `5000` and save | "…updated. The auction sheet has the new base price too." | ☐ |
+| 12b.3 | Open **Administration → Auction** and find them | The sheet shows ₹5,000, not the old figure | ☐ |
+| 12b.4 | Back on **Players**, set their auction set to `Marquee` and their type to a different one | Both change; the auction sheet can sort by either | ☐ |
+| 12b.5 | Clear the short name and save | It is cleared, not left as it was | ☐ |
+| 12b.6 | Set the base price to `0` | Refused: must be a positive amount | ☐ |
+| 12b.7 | Now open a player who has been **sold** and try to change the base price | Refused, saying the price is settled once a lot has been called | ☐ |
+| 12b.8 | On that same sold player, fix their **name** and save | Allowed — only the money is locked | ☐ |
+| 12b.9 | Check their sale is untouched | Same team, same price | ☐ |
+| 12b.10 | **Administration → Teams**, change a team's colour and home ground, save | Both change; the board picks up the colour | ☐ |
+| 12b.11 | As an administrator, set that team's purse **below** what it has already spent | Refused, naming the amount already spent | ☐ |
+| 12b.12 | Set it higher instead | Saved, and "purse left" goes up by the difference | ☐ |
+
+---
+
+## Module 12c — The activity log
+
+**Goal:** every change is written down, with what it was before, and the
+log can never stop a change from being saved.
+
+Run **database/migrations/006_activity_log.sql** first.
+
+| # | Do this | Should happen | ✓ |
+|---|---------|---------------|---|
+| 12c.1 | **Administration → Activity** | A list, newest first. On a fresh database, one line saying logging was switched on | ☐ |
+| 12c.2 | Edit a player's base price on **Players**, then come back | A new line naming you, the player, and the price **before and after** | ☐ |
+| 12c.3 | Change a team's colour, then come back | A line showing the old colour and the new one | ☐ |
+| 12c.4 | Save a form **without changing anything** | No new line. A save that changes nothing is not a change | ☐ |
+| 12c.5 | Sell a player on the auction sheet | A gold line naming the buying team and the price | ☐ |
+| 12c.6 | Press **Undo** on that sale | A second line showing the price going back | ☐ |
+| 12c.7 | Approve somebody, and reset somebody's password | Both are listed. The reset says a password was issued and **does not show it** | ☐ |
+| 12c.8 | Look for anything on the page that edits or deletes a line | There is none. It is read-only on purpose | ☐ |
+| 12c.9 | Sign in as a **tournament administrator** and open Activity | Only their own tournament's lines | ☐ |
+| 12c.10 | On the server, open the `error_log` file in your cPanel account | The same changes appear there as `[activity]` lines | ☐ |
+
+---
+
 ## Module 13 — Security spot-checks
 
 Quick, and worth doing once.
